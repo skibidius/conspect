@@ -119,15 +119,25 @@ fun SubjectsScreen(
                 )
             }
 
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                SemesterSummaryCard(
-                    subjectsCount = subjects.size,
-                    notesCount = totalNotes,
-                    minutes = subjects.sumOf { totalMinutes(it.id) }
-                )
+            if (subjects.isEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Text(
+                        text = "Добавьте первый предмет, чтобы вести конспекты.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    SemesterSummaryCard(
+                        subjectsCount = subjects.size,
+                        notesCount = totalNotes,
+                        minutes = subjects.sumOf { totalMinutes(it.id) }
+                    )
+                }
             }
 
-        items(subjects, key = { it.id }) { subject ->
+            items(subjects, key = { it.id }) { subject ->
             SubjectGridCard(
                 subject = subject,
                 noteCount = notesCount(subject.id),
