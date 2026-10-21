@@ -1,0 +1,1027 @@
+package ru.konspekt.app.ui.screens.record
+
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Flag
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Stop
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import kotlinx.coroutines.delay
+import ru.konspekt.app.data.Subject
+import ru.konspekt.app.recording.AudioCapture
+import ru.konspekt.app.recording.OfflineSpeechCapture
+import ru.konspekt.app.ui.components.KonspektLogo
+import ru.konspekt.app.ui.theme.LocalKonspektDark
+import java.util.Locale
+
+private enum class RecordStage { RECORDING, PAUSED, PROCESSING }
+
+private data class TranscriptLine(
+    val time: String,
+    val text: String,
+    val offTopic: Boolean = false
+)
+
+private data class DemoLine(val text: String, val offTopic: Boolean = false)
+
+private val demoScript = listOf(
+    DemoLine("Сегодня разберём производную сложной функции и правило цепочки."),
+    DemoLine("Напомню, что производная описывает мгновенную скорость изменения функции."),
+    DemoLine("Формально это предел отношения приращения функции к приращению аргумента."),
+    DemoLine("Кстати, в среду в 16:00 будет консультация в 402-й аудитории, приходите.", true),
+    DemoLine("Теперь перейдём к сложной функции: у неё есть внешняя и внутренняя части."),
+    DemoLine("Обозначим внутреннюю функцию через g, а внешнюю — через f."),
+    DemoLine("Небольшое отступление про конференцию в Казани и потерянный доклад.", true),
+    DemoLine("Получаем правило: f от g штрих умножить на g штрих."),
+    DemoLine("Разберём пример: y равно синус от трёх икс квадрат плюс один."),
+    DemoLine("Внешняя функция — синус, внутренняя — квадратичная."),
+    DemoLine("Производная равна косинусу, умноженному на шесть икс."),
+    DemoLine("Не забывайте проверять область определения функции.")
+)
+
+@Composable
+fun RecordScreen(
+    subject: Subject,
+    topic: String,
+    demoMode: Boolean,
+    onClose: () -> Unit,
+    onFinish: (transcript: List<String>, durationSeconds: Int, demo: Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val initialDemoLines = remember {
+        demoScript.take(6).mapIndexed { index, line ->
+            TranscriptLine(
+                time = String.format(Locale.US, "00:%02d", 4 + index * 7),
+                text = line.text,
+                offTopic = line.offTopic
+            )
+        }
+    }
+    var stage by remember { mutableStateOf(RecordStage.RECORDING) }
+    var elapsed by remember { mutableIntStateOf(if (demoMode) 42 else 0) }
+    val lines = remember { mutableStateListOf<TranscriptLine>().apply { addAll(initialDemoLines) } }
+    var nextDemoIndex by remember { mutableIntStateOf(if (demoMode) 6 else 0) }
+    var partialText by remember { mutableStateOf("") }
+    var speechError by remember { mutableStateOf<String?>(null) }
+    var showCloseDialog by remember { mutableStateOf(false) }
+    var processingStep by remember { mutableIntStateOf(0) }
+    var amplitude by remember { mutableStateOf(0f) }
+    var permissionGranted by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                PackageManager.PERMISSION_GRANTED
+        )
+    }
+    var startRequested by remember { mutableStateOf(false) }
+
+    BackHandler {
+        if (stage != RecordStage.PROCESSING) showCloseDialog = true
+    }
+
+    val audioCapture = remember { AudioCapture(context) }
+    val speechCapture = remember {
+        OfflineSpeechCapture(
+            context = context,
+            onPartial = { partialText = it },
+            onFinal = { text ->
+                if (text.isNotBlank()) {
+                    lines.add(
+                        TranscriptLine(
+                            time = formatTime(elapsed),
+                            text = text.trim(),
+                            offTopic = isOffTopic(text)
+                        )
+                    )
+                    partialText = ""
+                }
+            },
+            onUnavailable = { message ->
+                speechError = message
+                partialText = ""
+            }
+        )
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        permissionGranted = granted
+        if (granted) {
+            audioCapture.start()
+            speechCapture.start()
+        } else {
+            speechError = "Нет доступа к микрофону"
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            audioCapture.stop()
+            speechCapture.stop()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (!demoMode) {
+            startRequested = true
+            if (permissionGranted) {
+                audioCapture.start()
+                speechCapture.start()
+            } else {
+                permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            }
+        }
+    }
+
+    LaunchedEffect(stage) {
+        if (stage == RecordStage.RECORDING) {
+            while (true) {
+                delay(1000)
+                elapsed += 1
+            }
+        }
+    }
+
+    LaunchedEffect(stage, demoMode) {
+        if (demoMode && stage == RecordStage.RECORDING) {
+            while (nextDemoIndex < demoScript.size) {
+                delay(3100)
+                if (stage != RecordStage.RECORDING) break
+                val item = demoScript[nextDemoIndex]
+                lines.add(
+                    TranscriptLine(
+                        time = formatTime(elapsed),
+                        text = item.text,
+                        offTopic = item.offTopic
+                    )
+                )
+                nextDemoIndex += 1
+            }
+        }
+    }
+
+    LaunchedEffect(stage, demoMode) {
+        if (!demoMode && stage == RecordStage.RECORDING) {
+            while (true) {
+                amplitude = audioCapture.amplitude()
+                delay(120)
+            }
+        }
+    }
+
+    LaunchedEffect(stage) {
+        if (stage == RecordStage.PROCESSING) {
+            audioCapture.stop()
+            speechCapture.stop()
+            for (step in 1..5) {
+                delay(620)
+                processingStep = step
+            }
+            delay(500)
+            val transcript = if (demoMode) {
+                demoScript.map { it.text }
+            } else {
+                lines.map { it.text }.filter { it.isNotBlank() }
+            }
+            onFinish(transcript, (elapsed / 60).coerceAtLeast(1), demoMode)
+        }
+    }
+
+    if (stage == RecordStage.PROCESSING) {
+        ProcessingScreen(
+            subject = subject,
+            topic = topic,
+            step = processingStep,
+            modifier = modifier
+        )
+        return
+    }
+
+    val dark = LocalKonspektDark.current
+    val isPaused = stage == RecordStage.PAUSED
+    val active = stage == RecordStage.RECORDING
+    val transcriptState = rememberLazyListState()
+
+    LaunchedEffect(lines.size, partialText) {
+        val target = (lines.size + if (partialText.isNotBlank()) 1 else 0).coerceAtLeast(1)
+        transcriptState.animateScrollToItem((target - 1).coerceAtLeast(0))
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surface)
+            .statusBarsPadding()
+            .navigationBarsPadding()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = {
+                if (stage == RecordStage.PROCESSING) onClose() else showCloseDialog = true
+            }) {
+                Icon(
+                    imageVector = Icons.Rounded.Close,
+                    contentDescription = "Закрыть",
+                    tint = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = subject.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = topic.ifBlank { "Новая лекция" },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Lock,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = "Локально",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        RecordingStage(
+            subject = subject,
+            elapsed = elapsed,
+            active = active,
+            paused = isPaused,
+            demoMode = demoMode,
+            amplitude = amplitude,
+            onPause = {
+                if (stage == RecordStage.RECORDING) {
+                    stage = RecordStage.PAUSED
+                    if (!demoMode) {
+                        audioCapture.pause()
+                        speechCapture.stop()
+                    }
+                } else {
+                    stage = RecordStage.RECORDING
+                    if (!demoMode) {
+                        audioCapture.resume()
+                        speechCapture.start()
+                    }
+                }
+            },
+            onStop = { stage = RecordStage.PROCESSING },
+            onFlag = {
+                lines.add(
+                    TranscriptLine(
+                        time = formatTime(elapsed),
+                        text = "Важный момент отмечен",
+                        offTopic = false
+                    )
+                )
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(0.92f)
+        )
+
+        TranscriptPanel(
+            lines = lines,
+            partialText = partialText,
+            speechError = speechError,
+            active = active,
+            demoMode = demoMode,
+            listState = transcriptState,
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1.08f)
+        )
+    }
+
+    if (showCloseDialog) {
+        AlertDialog(
+            onDismissRequest = { showCloseDialog = false },
+            shape = RoundedCornerShape(28.dp),
+            title = { Text("Прервать запись?") },
+            text = { Text("Аудио и текущий транскрипт будут удалены. Конспект не создастся.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showCloseDialog = false
+                    audioCapture.stop()
+                    speechCapture.stop()
+                    onClose()
+                }) {
+                    Text("Прервать", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCloseDialog = false }) {
+                    Text("Продолжить")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun RecordingStage(
+    subject: Subject,
+    elapsed: Int,
+    active: Boolean,
+    paused: Boolean,
+    demoMode: Boolean,
+    amplitude: Float,
+    onPause: () -> Unit,
+    onStop: () -> Unit,
+    onFlag: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val dark = LocalKonspektDark.current
+    val transition = rememberInfiniteTransition(label = "recording-pulse")
+    val pulse by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "pulse"
+    )
+    val onContainer = MaterialTheme.colorScheme.onPrimaryContainer
+    val primary = MaterialTheme.colorScheme.primary
+
+    BoxWithConstraints(
+        modifier = modifier.padding(horizontal = 20.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        val orbSize = if (maxWidth < 340.dp) 150.dp else 178.dp
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(
+                modifier = Modifier.size(orbSize + 30.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    drawCircle(
+                        color = primary.copy(alpha = 0.10f),
+                        radius = size.minDimension * (0.34f + 0.08f * pulse)
+                    )
+                    drawCircle(
+                        color = primary.copy(alpha = 0.12f),
+                        radius = size.minDimension * 0.38f,
+                        style = Stroke(width = 1.dp.toPx())
+                    )
+                    drawCircle(
+                        color = onContainer.copy(alpha = 0.05f),
+                        radius = size.minDimension * (0.44f + 0.03f * pulse)
+                    )
+                }
+                Surface(
+                    modifier = Modifier.size(orbSize),
+                    shape = CircleShape,
+                    color = if (paused) MaterialTheme.colorScheme.surfaceContainerHigh
+                    else MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            drawCircle(
+                                color = onContainer.copy(alpha = 0.04f),
+                                radius = size.minDimension * 0.34f,
+                                center = Offset(size.width * 0.82f, size.height * 0.18f)
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = formatTime(elapsed),
+                                style = MaterialTheme.typography.displaySmall.copy(
+                                    fontWeight = FontWeight.Medium,
+                                    letterSpacing = 1.sp
+                                ),
+                                color = if (paused) MaterialTheme.colorScheme.onSurfaceVariant else onContainer
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            if (paused) MaterialTheme.colorScheme.outline
+                                            else subject.tone.accent(dark)
+                                        )
+                                )
+                                Spacer(Modifier.width(5.dp))
+                                Text(
+                                    text = if (paused) "Пауза" else "Идёт запись",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = if (paused) MaterialTheme.colorScheme.onSurfaceVariant
+                                    else onContainer.copy(alpha = 0.75f)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(4.dp))
+            RecordingWave(
+                active = active,
+                amplitude = amplitude,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(width = 132.dp, height = 28.dp)
+            )
+            Spacer(Modifier.height(10.dp))
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(26.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CircleAction(
+                    icon = Icons.Rounded.Flag,
+                    label = "Момент",
+                    size = 46.dp,
+                    container = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    content = MaterialTheme.colorScheme.onSurfaceVariant,
+                    enabled = active,
+                    onClick = onFlag
+                )
+                CircleAction(
+                    icon = Icons.Rounded.Stop,
+                    label = "Стоп",
+                    size = 68.dp,
+                    container = MaterialTheme.colorScheme.primary,
+                    content = MaterialTheme.colorScheme.onPrimary,
+                    onClick = onStop
+                )
+                CircleAction(
+                    icon = if (paused) Icons.Rounded.PlayArrow else Icons.Rounded.Pause,
+                    label = if (paused) "Продолжить" else "Пауза",
+                    size = 50.dp,
+                    container = MaterialTheme.colorScheme.secondaryContainer,
+                    content = MaterialTheme.colorScheme.onSecondaryContainer,
+                    onClick = onPause
+                )
+            }
+
+            Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Rounded.AutoAwesome,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(13.dp)
+                )
+                Spacer(Modifier.width(5.dp))
+                Text(
+                    text = if (demoMode) "Демо-лекция · ИИ структурирует на устройстве"
+                    else "ИИ слушает · обработка на устройстве",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CircleAction(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    size: androidx.compose.ui.unit.Dp,
+    container: Color,
+    content: Color,
+    onClick: () -> Unit,
+    enabled: Boolean = true
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Surface(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = Modifier.size(size),
+            shape = CircleShape,
+            color = container
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    tint = content,
+                    modifier = Modifier.size(size * 0.36f)
+                )
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
+        )
+    }
+}
+
+@Composable
+private fun RecordingWave(
+    active: Boolean,
+    amplitude: Float,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    val transition = rememberInfiniteTransition(label = "wave")
+    val phase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = (Math.PI * 2).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(1400, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "phase"
+    )
+    Canvas(modifier = modifier) {
+        val bars = 13
+        val step = size.width / bars
+        repeat(bars) { index ->
+            val animated = (kotlin.math.sin(phase + index * 0.7f) + 1f) / 2f
+            val live = if (amplitude > 0.01f) amplitude.coerceIn(0.1f, 1f) else animated
+            val factor = if (active) (0.2f + animated * 0.35f + live * 0.45f) else 0.18f
+            val barHeight = size.height * factor
+            drawRoundRect(
+                color = color.copy(alpha = if (active) 0.8f else 0.3f),
+                topLeft = Offset(index * step + step * 0.2f, (size.height - barHeight) / 2f),
+                size = Size(step * 0.46f, barHeight),
+                cornerRadius = CornerRadius(step * 0.24f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun TranscriptPanel(
+    lines: List<TranscriptLine>,
+    partialText: String,
+    speechError: String?,
+    active: Boolean,
+    demoMode: Boolean,
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    modifier: Modifier = Modifier
+) {
+    val offTopicCount = lines.count { it.offTopic } + if (partialText.isNotBlank() && isOffTopic(partialText)) 1 else 0
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .padding(top = 10.dp)
+                    .align(Alignment.CenterHorizontally)
+                    .size(width = 34.dp, height = 4.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.outlineVariant)
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 20.dp, end = 16.dp, top = 12.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Транскрипт",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(Modifier.width(8.dp))
+                Box(
+                    modifier = Modifier
+                        .size(7.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (active) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.outline
+                        )
+                )
+                Spacer(Modifier.weight(1f))
+                if (offTopicCount > 0) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.tertiaryContainer
+                    ) {
+                        Text(
+                            text = "$offTopicCount не по теме",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                        )
+                    }
+                }
+            }
+
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                    start = 18.dp,
+                    end = 18.dp,
+                    top = 4.dp,
+                    bottom = 12.dp
+                ),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                items(lines, key = { "${it.time}-${it.text.hashCode()}" }) { line ->
+                    TranscriptRow(line)
+                }
+                if (partialText.isNotBlank()) {
+                    item {
+                        TranscriptRow(
+                            TranscriptLine(
+                                time = "сейчас",
+                                text = partialText,
+                                offTopic = isOffTopic(partialText)
+                            ),
+                            partial = true
+                        )
+                    }
+                }
+                if (active) {
+                    item {
+                        Row(
+                            modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Mic,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = if (demoMode) "ИИ слушает лекцию…" else "Слушаю микрофон…",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
+                if (speechError != null) {
+                    item {
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = MaterialTheme.colorScheme.errorContainer,
+                            modifier = Modifier.padding(top = 8.dp)
+                        ) {
+                            Text(
+                                text = "$speechError. Переключите демо-лекцию в настройках.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.padding(12.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceContainer)
+                    .padding(horizontal = 18.dp, vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.AutoAwesome,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(13.dp)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = "Отступления не попадут в конспект",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TranscriptRow(line: TranscriptLine, partial: Boolean = false) {
+    val dark = LocalKonspektDark.current
+    val base = if (line.offTopic) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.58f)
+    else MaterialTheme.colorScheme.onSurface
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(
+                when {
+                    partial -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.38f)
+                    line.offTopic -> MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.65f)
+                    else -> Color.Transparent
+                }
+            )
+            .padding(horizontal = 8.dp, vertical = 7.dp)
+    ) {
+        Text(
+            text = line.time,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+            modifier = Modifier.width(44.dp)
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = line.text,
+                style = MaterialTheme.typography.bodyMedium,
+                color = base
+            )
+            if (line.offTopic) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "НЕ ПО ТЕМЕ · СКРЫТО",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.85f),
+                    letterSpacing = 0.5.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProcessingScreen(
+    subject: Subject,
+    topic: String,
+    step: Int,
+    modifier: Modifier = Modifier
+) {
+    val steps = listOf(
+        "Расшифровываем лекцию",
+        "Убираем отступления",
+        "Структурируем тезисы",
+        "Верстаем формулы LaTeX",
+        "Готовим PDF-версию"
+    )
+    val progress by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = step / steps.size.toFloat(),
+        animationSpec = tween(500),
+        label = "progress"
+    )
+    val transition = rememberInfiniteTransition(label = "processing")
+    val rotation by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rotation"
+    )
+    val primary = MaterialTheme.colorScheme.primary
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.surface,
+                        MaterialTheme.colorScheme.surfaceContainerLow
+                    )
+                )
+            )
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(Modifier.weight(0.7f))
+        Box(
+            modifier = Modifier.size(120.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                drawCircle(
+                    color = primary.copy(alpha = 0.08f),
+                    radius = size.minDimension / 2f
+                )
+                drawArc(
+                    color = primary,
+                    startAngle = rotation,
+                    sweepAngle = 90f,
+                    useCenter = false,
+                    topLeft = Offset(8.dp.toPx(), 8.dp.toPx()),
+                    size = Size(size.width - 16.dp.toPx(), size.height - 16.dp.toPx()),
+                    style = Stroke(width = 3.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                )
+            }
+            KonspektLogo(size = 54.dp)
+        }
+        Spacer(Modifier.height(24.dp))
+        Text(
+            text = "Собираем конспект",
+            style = MaterialTheme.typography.headlineMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(Modifier.height(5.dp))
+        Text(
+            text = "${subject.shortName} · ${topic.ifBlank { "Новая лекция" }}",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Spacer(Modifier.height(28.dp))
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(26.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLow
+        ) {
+            Column(modifier = Modifier.padding(18.dp)) {
+                steps.forEachIndexed { index, label ->
+                    val done = index < step
+                    val current = index == step
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(26.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    when {
+                                        done -> MaterialTheme.colorScheme.primary
+                                        current -> MaterialTheme.colorScheme.primaryContainer
+                                        else -> MaterialTheme.colorScheme.surfaceContainerHigh
+                                    }
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            when {
+                                done -> Icon(
+                                    imageVector = Icons.Rounded.Check,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                current -> CircularProgressIndicator(
+                                    modifier = Modifier.size(14.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                else -> Text(
+                                    text = "${index + 1}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (done || current) MaterialTheme.colorScheme.onSurface
+                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+                        )
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(5.dp)
+                        .clip(CircleShape),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                )
+            }
+        }
+        Spacer(Modifier.weight(0.8f))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = Icons.Rounded.Lock,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(13.dp)
+            )
+            Spacer(Modifier.width(5.dp))
+            Text(
+                text = "Всё обрабатывается на этом устройстве",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+    }
+}
+
+private fun formatTime(seconds: Int): String {
+    val safe = seconds.coerceAtLeast(0)
+    return String.format(Locale.US, "%02d:%02d", safe / 60, safe % 60)
+}
+
+private fun isOffTopic(text: String): Boolean {
+    val lower = text.lowercase(Locale("ru"))
+    return listOf(
+        "консультац", "отступлен", "конференц", "столов", "перерыв",
+        "домашн", "зачёт", "зачет", "расписан", "перенес"
+    ).any { lower.contains(it) }
+}
