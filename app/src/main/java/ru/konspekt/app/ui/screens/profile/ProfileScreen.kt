@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,24 +30,43 @@ import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayCircle
+import androidx.compose.material.icons.rounded.SmartToy
+import androidx.compose.material.icons.rounded.Key
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.Shield
-import androidx.compose.material.icons.rounded.AccountTree
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ru.konspekt.app.BuildConfig
+import ru.konspekt.app.data.AiMode
 import ru.konspekt.app.data.Palette
 import ru.konspekt.app.data.ThemeMode
 import ru.konspekt.app.data.UserSettings
@@ -57,47 +75,48 @@ import ru.konspekt.app.ui.components.UserAvatar
 import ru.konspekt.app.ui.theme.LocalKonspektDark
 import ru.konspekt.app.ui.theme.konspektColorScheme
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
     settings: UserSettings,
     notesCount: Int,
     subjectsCount: Int,
     totalMinutes: Int,
+    hasDeepSeekKey: Boolean,
+    onSaveDeepSeekKey: (String) -> Unit,
+    onClearDeepSeekKey: () -> Unit,
     onBack: () -> Unit,
     onSettingsChange: ((UserSettings) -> UserSettings) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var apiKeyInput by remember { mutableStateOf("") }
+    var showApiKey by remember { mutableStateOf(false) }
+
     Column(
         modifier = modifier
             .fillMaxSize()
-            .statusBarsPadding()
             .navigationBarsPadding()
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = "Назад",
-                    tint = MaterialTheme.colorScheme.onSurface
-                )
-            }
-            Text(
-                text = "Профиль и настройки",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface
+        TopAppBar(
+            title = { Text("Настройки") },
+            navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = "Назад"
+                    )
+                }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.surface
             )
-        }
+        )
 
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp)
+                .padding(horizontal = 16.dp)
                 .padding(top = 4.dp, bottom = 36.dp)
         ) {
             ProfileHeader(settings.userName)
@@ -118,21 +137,8 @@ fun ProfileScreen(
                     selected = settings.themeMode,
                     onSelect = { mode -> onSettingsChange { it.copy(themeMode = mode) } }
                 )
-                Spacer(Modifier.height(18.dp))
-                DividerLine()
-                Spacer(Modifier.height(16.dp))
-                SettingHeader(
-                    icon = Icons.Rounded.Palette,
-                    title = "Цветовая схема",
-                    subtitle = "Спокойные тона Material You"
-                )
-                Spacer(Modifier.height(14.dp))
-                PaletteSelector(
-                    selected = settings.palette,
-                    onSelect = { palette -> onSettingsChange { it.copy(palette = palette) } }
-                )
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(14.dp))
                     DividerLine()
                     Spacer(Modifier.height(12.dp))
                     SwitchRow(
@@ -143,6 +149,130 @@ fun ProfileScreen(
                         onCheckedChange = { enabled ->
                             onSettingsChange { it.copy(dynamicColor = enabled) }
                         }
+                    )
+                }
+                if (!settings.dynamicColor || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+                    Spacer(Modifier.height(14.dp))
+                    DividerLine()
+                    Spacer(Modifier.height(14.dp))
+                    SettingHeader(
+                        icon = Icons.Rounded.Palette,
+                        title = "Цветовая схема",
+                        subtitle = "Спокойные тона Material You"
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    PaletteSelector(
+                        selected = settings.palette,
+                        onSelect = { palette -> onSettingsChange { it.copy(palette = palette) } }
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(26.dp))
+            SectionLabel("AI-обработка")
+            Spacer(Modifier.height(10.dp))
+            SettingsCard {
+                SettingHeader(
+                    icon = Icons.Rounded.SmartToy,
+                    title = "Обработка конспекта",
+                    subtitle = "Где собирать заметки из транскрипта"
+                )
+                Spacer(Modifier.height(12.dp))
+                AiModeSelector(
+                    selected = settings.aiMode,
+                    onSelect = { mode -> onSettingsChange { it.copy(aiMode = mode) } }
+                )
+                Spacer(Modifier.height(12.dp))
+                if (settings.aiMode == AiMode.LOCAL) {
+                    Text(
+                        text = "Локальный режим: расшифровка и структурирование выполняются на устройстве.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    if (!hasDeepSeekKey) {
+                        Text(
+                            text = "Добавьте API-ключ DeepSeek, иначе конспект будет собран локально.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Spacer(Modifier.height(10.dp))
+                    }
+                    if (hasDeepSeekKey) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Key,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.size(8.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "API-ключ сохранён",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "Зашифрован на устройстве",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            TextButton(onClick = onClearDeepSeekKey) {
+                                Text("Удалить")
+                            }
+                        }
+                    } else {
+                        OutlinedTextField(
+                            value = apiKeyInput,
+                            onValueChange = { apiKeyInput = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("API-ключ DeepSeek") },
+                            placeholder = { Text("sk-…") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(14.dp),
+                            visualTransformation = if (showApiKey) {
+                                VisualTransformation.None
+                            } else {
+                                PasswordVisualTransformation()
+                            },
+                            trailingIcon = {
+                                IconButton(onClick = { showApiKey = !showApiKey }) {
+                                    Icon(
+                                        imageVector = if (showApiKey) {
+                                            Icons.Rounded.VisibilityOff
+                                        } else {
+                                            Icons.Rounded.Visibility
+                                        },
+                                        contentDescription = if (showApiKey) "Скрыть ключ" else "Показать ключ"
+                                    )
+                                }
+                            }
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Button(
+                            onClick = {
+                                onSaveDeepSeekKey(apiKeyInput)
+                                apiKeyInput = ""
+                            },
+                            enabled = apiKeyInput.isNotBlank()
+                        ) {
+                            Text("Сохранить ключ")
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = "В этом режиме текст лекции отправляется в DeepSeek. Аудио не отправляется.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -160,30 +290,20 @@ fun ProfileScreen(
                         onSettingsChange { it.copy(filterTangents = enabled) }
                     }
                 )
-                Spacer(Modifier.height(12.dp))
-                DividerLine()
-                Spacer(Modifier.height(12.dp))
-                SwitchRow(
-                    icon = Icons.Rounded.AccountTree,
-                    title = "Автоструктурирование",
-                    subtitle = "Заголовки, формулы и тезисы",
-                    checked = settings.autoStructure,
-                    onCheckedChange = { enabled ->
-                        onSettingsChange { it.copy(autoStructure = enabled) }
-                    }
-                )
-                Spacer(Modifier.height(12.dp))
-                DividerLine()
-                Spacer(Modifier.height(12.dp))
-                SwitchRow(
-                    icon = Icons.Rounded.PlayCircle,
-                    title = "Демо-лекция",
-                    subtitle = "Показывать пример при записи",
-                    checked = settings.demoMode,
-                    onCheckedChange = { enabled ->
-                        onSettingsChange { it.copy(demoMode = enabled) }
-                    }
-                )
+                if (BuildConfig.DEBUG) {
+                    Spacer(Modifier.height(12.dp))
+                    DividerLine()
+                    Spacer(Modifier.height(12.dp))
+                    SwitchRow(
+                        icon = Icons.Rounded.PlayCircle,
+                        title = "Демо-лекция",
+                        subtitle = "Только для отладки",
+                        checked = settings.demoMode,
+                        onCheckedChange = { enabled ->
+                            onSettingsChange { it.copy(demoMode = enabled) }
+                        }
+                    )
+                }
             }
 
             Spacer(Modifier.height(26.dp))
@@ -215,13 +335,13 @@ fun ProfileScreen(
                     Spacer(Modifier.size(13.dp))
                     Column {
                         Text(
-                            text = "Всё остаётся на устройстве",
+                            text = "Локально по умолчанию",
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                         Spacer(Modifier.height(3.dp))
                         Text(
-                            text = "Аудио и текст лекций не отправляются в интернет. Конспекты хранятся только в памяти телефона.",
+                            text = "По умолчанию аудио и текст остаются на телефоне. В режиме DeepSeek отправляется только текст лекции.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f)
                         )
@@ -236,16 +356,16 @@ fun ProfileScreen(
                 color = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
                 Column {
-                    InfoRow("Версия", "1.0.0")
+                    InfoRow("Версия", BuildConfig.VERSION_NAME)
                     DividerLine(Modifier.padding(horizontal = 16.dp))
-                    InfoRow("Обработка", "Локальная")
+                    InfoRow("Обработка", if (settings.aiMode == AiMode.DEEPSEEK) "DeepSeek" else "Локальная")
                     DividerLine(Modifier.padding(horizontal = 16.dp))
-                    InfoRow("Данные", "Облако не используется")
+                    InfoRow("Данные", "Приватное хранилище")
                 }
             }
             Spacer(Modifier.height(20.dp))
             Text(
-                text = "Конспект · сделано для студентов",
+                text = "Conspect · сделано для студентов",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 modifier = Modifier.align(Alignment.CenterHorizontally)
@@ -406,35 +526,36 @@ private fun SettingHeader(icon: ImageVector, title: String, subtitle: String) {
 }
 
 @Composable
+private fun AiModeSelector(selected: AiMode, onSelect: (AiMode) -> Unit) {
+    val options = listOf(AiMode.LOCAL to "На устройстве", AiMode.DEEPSEEK to "DeepSeek")
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+        options.forEachIndexed { index, (mode, label) ->
+            SegmentedButton(
+                selected = selected == mode,
+                onClick = { onSelect(mode) },
+                shape = SegmentedButtonDefaults.itemShape(index, options.size)
+            ) {
+                Text(label)
+            }
+        }
+    }
+}
+
+@Composable
 private fun ThemeModeSelector(selected: ThemeMode, onSelect: (ThemeMode) -> Unit) {
     val options = listOf(
         ThemeMode.SYSTEM to "Системная",
         ThemeMode.LIGHT to "Светлая",
         ThemeMode.DARK to "Тёмная"
     )
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .padding(3.dp)
-    ) {
-        options.forEach { (mode, label) ->
-            val active = mode == selected
-            Surface(
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+        options.forEachIndexed { index, (mode, label) ->
+            SegmentedButton(
+                selected = selected == mode,
                 onClick = { onSelect(mode) },
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(11.dp),
-                color = if (active) MaterialTheme.colorScheme.surfaceContainerLowest else Color.Transparent
+                shape = SegmentedButtonDefaults.itemShape(index, options.size)
             ) {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (active) MaterialTheme.colorScheme.onSurface
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(vertical = 9.dp),
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                )
+                Text(label, style = MaterialTheme.typography.labelMedium)
             }
         }
     }

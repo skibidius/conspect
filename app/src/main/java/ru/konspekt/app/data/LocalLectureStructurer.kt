@@ -126,7 +126,7 @@ object LocalLectureStructurer {
             \geometry{margin=2.4cm}
 
             \title{$topic}
-            \author{Конспект}
+            \author{Conspect}
             \date{$date}
 
             \begin{document}

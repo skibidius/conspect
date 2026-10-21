@@ -198,7 +198,7 @@ object PdfExporter {
             val values = ContentValues().apply {
                 put(MediaStore.MediaColumns.DISPLAY_NAME, name)
                 put(MediaStore.MediaColumns.MIME_TYPE, "application/pdf")
-                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Конспект")
+                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Conspect")
                 put(MediaStore.MediaColumns.IS_PENDING, 1)
             }
             val collection = MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
@@ -345,7 +345,7 @@ object PdfExporter {
               </style>
             </head>
             <body>
-              <div class="brand"><div class="logo"></div><span>Конспект · локальный AI-конспект</span></div>
+              <div class="brand"><div class="logo"></div><span>CONSPECT · локальный AI-конспект</span></div>
               <div class="subject">${subject.name.escapeHtml()}</div>
               <h1>${note.title.escapeHtml()}</h1>
               ${if (note.subtitle.isNotBlank()) "<div class=\"subtitle\">${note.subtitle.escapeHtml()}</div>" else ""}
@@ -359,7 +359,7 @@ object PdfExporter {
               $terms
               $sections
               $skipped
-              <div class="footer"><span>Конспект · ${subject.shortName.escapeHtml()}</span><span>Создано на устройстве</span></div>
+              <div class="footer"><span>Conspect · ${subject.shortName.escapeHtml()}</span><span>Создано на устройстве</span></div>
               <script src="katex.min.js"></script>
               <script>
                 document.querySelectorAll('[data-tex]').forEach(function (el) {

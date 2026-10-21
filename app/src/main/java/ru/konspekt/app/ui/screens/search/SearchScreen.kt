@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -24,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -31,6 +31,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,11 +52,10 @@ import ru.konspekt.app.data.Note
 import ru.konspekt.app.data.Subject
 import ru.konspekt.app.ui.components.NoteRow
 import ru.konspekt.app.ui.components.SectionHeader
-import ru.konspekt.app.ui.components.Wordmark
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.LaunchedEffect
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(
     notes: List<Note>,
@@ -84,38 +85,33 @@ fun SearchScreen(
 
     val suggestions = listOf("Производная", "Ньютон", "O(n log n)", "Present Perfect", "Жанна д’Арк")
 
-    LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .statusBarsPadding(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(
-            start = 20.dp,
-            end = 20.dp,
-            top = 10.dp,
-            bottom = 130.dp
+    Column(modifier = modifier.fillMaxSize()) {
+        TopAppBar(
+            title = { Text("Поиск") },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            )
         )
-    ) {
-        item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Wordmark()
-                Spacer(Modifier.weight(1f))
-            }
-        }
-        item {
-            Column(modifier = Modifier.padding(top = 18.dp, bottom = 18.dp)) {
-                Text(
-                    text = "Поиск",
-                    style = MaterialTheme.typography.headlineLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(Modifier.height(5.dp))
+
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .weight(1f),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                start = 16.dp,
+                end = 16.dp,
+                top = 4.dp,
+                bottom = 160.dp
+            )
+        ) {
+            item {
                 Text(
                     text = "По всем вашим конспектам — офлайн",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                Spacer(Modifier.height(14.dp))
             }
-        }
         item {
             TextField(
                 value = query,
@@ -172,29 +168,17 @@ fun SearchScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     suggestions.forEach { suggestion ->
-                        Surface(
+                        AssistChip(
                             onClick = { query = suggestion },
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 13.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
+                            label = { Text(suggestion) },
+                            leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Rounded.History,
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(Modifier.size(6.dp))
-                                Text(
-                                    text = suggestion,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    modifier = Modifier.size(16.dp)
                                 )
                             }
-                        }
+                        )
                     }
                 }
             }
@@ -283,4 +267,5 @@ fun SearchScreen(
             }
         }
     }
+}
 }

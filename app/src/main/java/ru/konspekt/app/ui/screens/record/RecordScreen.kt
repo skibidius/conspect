@@ -39,6 +39,7 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -53,6 +54,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -78,9 +81,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
+import ru.konspekt.app.BuildConfig
+import ru.konspekt.app.data.NoteGenerationResult
 import ru.konspekt.app.data.Subject
-import ru.konspekt.app.recording.AudioCapture
 import ru.konspekt.app.recording.OfflineSpeechCapture
 import ru.konspekt.app.ui.components.KonspektLogo
 import ru.konspekt.app.ui.theme.LocalKonspektDark
@@ -111,18 +116,21 @@ private val demoScript = listOf(
     DemoLine("Не забывайте проверять область определения функции.")
 )
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun RecordScreen(
     subject: Subject,
     topic: String,
     demoMode: Boolean,
+    cloudMode: Boolean,
     onClose: () -> Unit,
-    onFinish: (transcript: List<String>, durationSeconds: Int, demo: Boolean) -> Unit,
+    onFinish: suspend (transcript: List<String>, durationSeconds: Int, demo: Boolean) -> NoteGenerationResult,
+    onCompleted: (NoteGenerationResult) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val initialDemoLines = remember {
-        demoScript.take(6).mapIndexed { index, line ->
+    val initialDemoLines = remember(demoMode) {
+        if (!demoMode) emptyList() else demoScript.take(4).mapIndexed { index, line ->
             TranscriptLine(
                 time = String.format(Locale.US, "00:%02d", 4 + index * 7),
                 text = line.text,
@@ -133,10 +141,11 @@ fun RecordScreen(
     var stage by remember { mutableStateOf(RecordStage.RECORDING) }
     var elapsed by remember { mutableIntStateOf(if (demoMode) 42 else 0) }
     val lines = remember { mutableStateListOf<TranscriptLine>().apply { addAll(initialDemoLines) } }
-    var nextDemoIndex by remember { mutableIntStateOf(if (demoMode) 6 else 0) }
+    var nextDemoIndex by remember { mutableIntStateOf(if (demoMode) 4 else 0) }
     var partialText by remember { mutableStateOf("") }
     var speechError by remember { mutableStateOf<String?>(null) }
     var showCloseDialog by remember { mutableStateOf(false) }
+    var showNoSpeechDialog by remember { mutableStateOf(false) }
     var processingStep by remember { mutableIntStateOf(0) }
     var amplitude by remember { mutableStateOf(0f) }
     var permissionGranted by remember {
@@ -145,13 +154,10 @@ fun RecordScreen(
                 PackageManager.PERMISSION_GRANTED
         )
     }
-    var startRequested by remember { mutableStateOf(false) }
-
     BackHandler {
         if (stage != RecordStage.PROCESSING) showCloseDialog = true
     }
 
-    val audioCapture = remember { AudioCapture(context) }
     val speechCapture = remember {
         OfflineSpeechCapture(
             context = context,
@@ -168,6 +174,7 @@ fun RecordScreen(
                     partialText = ""
                 }
             },
+            onAmplitude = { amplitude = it },
             onUnavailable = { message ->
                 speechError = message
                 partialText = ""
@@ -180,25 +187,24 @@ fun RecordScreen(
     ) { granted ->
         permissionGranted = granted
         if (granted) {
-            audioCapture.start()
             speechCapture.start()
         } else {
             speechError = "Нет доступа к микрофону"
         }
     }
 
+    val view = androidx.compose.ui.platform.LocalView.current
     DisposableEffect(Unit) {
+        view.keepScreenOn = true
         onDispose {
-            audioCapture.stop()
+            view.keepScreenOn = false
             speechCapture.stop()
         }
     }
 
     LaunchedEffect(Unit) {
         if (!demoMode) {
-            startRequested = true
             if (permissionGranted) {
-                audioCapture.start()
                 speechCapture.start()
             } else {
                 permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
@@ -233,30 +239,28 @@ fun RecordScreen(
         }
     }
 
-    LaunchedEffect(stage, demoMode) {
-        if (!demoMode && stage == RecordStage.RECORDING) {
-            while (true) {
-                amplitude = audioCapture.amplitude()
-                delay(120)
-            }
-        }
-    }
-
     LaunchedEffect(stage) {
         if (stage == RecordStage.PROCESSING) {
-            audioCapture.stop()
             speechCapture.stop()
-            for (step in 1..5) {
-                delay(620)
-                processingStep = step
-            }
-            delay(500)
             val transcript = if (demoMode) {
                 demoScript.map { it.text }
             } else {
-                lines.map { it.text }.filter { it.isNotBlank() }
+                (lines.map { it.text } + partialText).filter { it.isNotBlank() }
             }
-            onFinish(transcript, (elapsed / 60).coerceAtLeast(1), demoMode)
+            val generation = async {
+                onFinish(transcript, (elapsed / 60).coerceAtLeast(1), demoMode)
+            }
+            processingStep = 1
+            delay(500)
+            processingStep = 2
+            delay(500)
+            processingStep = 3
+            val result = generation.await()
+            processingStep = 4
+            delay(500)
+            processingStep = 5
+            delay(450)
+            onCompleted(result)
         }
     }
 
@@ -284,63 +288,65 @@ fun RecordScreen(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surface)
-            .statusBarsPadding()
             .navigationBarsPadding()
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = {
-                if (stage == RecordStage.PROCESSING) onClose() else showCloseDialog = true
-            }) {
-                Icon(
-                    imageVector = Icons.Rounded.Close,
-                    contentDescription = "Закрыть",
-                    tint = MaterialTheme.colorScheme.onSurface
-                )
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = subject.name,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = topic.ifBlank { "Новая лекция" },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Lock,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(12.dp)
-                    )
-                    Spacer(Modifier.width(4.dp))
+        TopAppBar(
+            title = {
+                Column {
                     Text(
-                        text = "Локально",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = subject.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = topic.ifBlank { "Новая лекция" },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
-            }
-        }
+            },
+            navigationIcon = {
+                IconButton(onClick = {
+                    if (stage == RecordStage.PROCESSING) onClose() else showCloseDialog = true
+                }) {
+                    Icon(
+                        imageVector = Icons.Rounded.Close,
+                        contentDescription = "Закрыть"
+                    )
+                }
+            },
+            actions = {
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    modifier = Modifier.padding(end = 12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = if (cloudMode) Icons.Rounded.Cloud else Icons.Rounded.Lock,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = if (cloudMode) "DeepSeek" else "Локально",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            )
+        )
 
         RecordingStage(
             subject = subject,
@@ -352,19 +358,29 @@ fun RecordScreen(
             onPause = {
                 if (stage == RecordStage.RECORDING) {
                     stage = RecordStage.PAUSED
-                    if (!demoMode) {
-                        audioCapture.pause()
-                        speechCapture.stop()
-                    }
+                    if (!demoMode) speechCapture.stop()
                 } else {
                     stage = RecordStage.RECORDING
-                    if (!demoMode) {
-                        audioCapture.resume()
-                        speechCapture.start()
-                    }
+                    if (!demoMode) speechCapture.start()
                 }
             },
-            onStop = { stage = RecordStage.PROCESSING },
+            onStop = {
+                if (!demoMode && lines.isEmpty() && partialText.isBlank()) {
+                    showNoSpeechDialog = true
+                } else {
+                    if (!demoMode && partialText.isNotBlank()) {
+                        lines.add(
+                            TranscriptLine(
+                                time = formatTime(elapsed),
+                                text = partialText.trim(),
+                                offTopic = isOffTopic(partialText)
+                            )
+                        )
+                        partialText = ""
+                    }
+                    stage = RecordStage.PROCESSING
+                }
+            },
             onFlag = {
                 lines.add(
                     TranscriptLine(
@@ -392,6 +408,23 @@ fun RecordScreen(
         )
     }
 
+    if (showNoSpeechDialog) {
+        AlertDialog(
+            onDismissRequest = { showNoSpeechDialog = false },
+            shape = RoundedCornerShape(28.dp),
+            title = { Text("Речь не распознана") },
+            text = {
+                Text(
+                    "Проверьте доступ к микрофону и офлайн-пакет русского языка " +
+                        "в настройках распознавания речи. Затем попробуйте ещё раз."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showNoSpeechDialog = false }) { Text("Продолжить") }
+            }
+        )
+    }
+
     if (showCloseDialog) {
         AlertDialog(
             onDismissRequest = { showCloseDialog = false },
@@ -401,7 +434,6 @@ fun RecordScreen(
             confirmButton = {
                 TextButton(onClick = {
                     showCloseDialog = false
-                    audioCapture.stop()
                     speechCapture.stop()
                     onClose()
                 }) {
@@ -500,7 +532,7 @@ private fun RecordingStage(
                                         .clip(CircleShape)
                                         .background(
                                             if (paused) MaterialTheme.colorScheme.outline
-                                            else subject.tone.accent(dark)
+                                            else MaterialTheme.colorScheme.error
                                         )
                                 )
                                 Spacer(Modifier.width(5.dp))
@@ -520,6 +552,7 @@ private fun RecordingStage(
             RecordingWave(
                 active = active,
                 amplitude = amplitude,
+                synthetic = demoMode,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(width = 132.dp, height = 28.dp)
             )
@@ -556,22 +589,6 @@ private fun RecordingStage(
                 )
             }
 
-            Spacer(Modifier.height(10.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Rounded.AutoAwesome,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(13.dp)
-                )
-                Spacer(Modifier.width(5.dp))
-                Text(
-                    text = if (demoMode) "Демо-лекция · ИИ структурирует на устройстве"
-                    else "ИИ слушает · обработка на устройстве",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
         }
     }
 }
@@ -616,6 +633,7 @@ private fun CircleAction(
 private fun RecordingWave(
     active: Boolean,
     amplitude: Float,
+    synthetic: Boolean,
     color: Color,
     modifier: Modifier = Modifier
 ) {
@@ -634,8 +652,8 @@ private fun RecordingWave(
         val step = size.width / bars
         repeat(bars) { index ->
             val animated = (kotlin.math.sin(phase + index * 0.7f) + 1f) / 2f
-            val live = if (amplitude > 0.01f) amplitude.coerceIn(0.1f, 1f) else animated
-            val factor = if (active) (0.2f + animated * 0.35f + live * 0.45f) else 0.18f
+            val live = if (synthetic) animated else amplitude.coerceIn(0f, 1f)
+            val factor = if (active) (0.14f + live * 0.78f) else 0.14f
             val barHeight = size.height * factor
             drawRoundRect(
                 color = color.copy(alpha = if (active) 0.8f else 0.3f),
@@ -663,7 +681,11 @@ private fun TranscriptPanel(
         shape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp))
+        ) {
             Box(
                 modifier = Modifier
                     .padding(top = 10.dp)
@@ -709,19 +731,22 @@ private fun TranscriptPanel(
                 }
             }
 
-            LazyColumn(
-                state = listState,
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                    start = 18.dp,
-                    end = 18.dp,
-                    top = 4.dp,
-                    bottom = 12.dp
-                ),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
+                    .weight(1f)
             ) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                        start = 18.dp,
+                        end = 18.dp,
+                        top = 4.dp,
+                        bottom = 12.dp
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
                 items(lines, key = { "${it.time}-${it.text.hashCode()}" }) { line ->
                     TranscriptRow(line)
                 }
@@ -737,7 +762,7 @@ private fun TranscriptPanel(
                         )
                     }
                 }
-                if (active) {
+                if (active && speechError == null) {
                     item {
                         Row(
                             modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp),
@@ -766,7 +791,11 @@ private fun TranscriptPanel(
                             modifier = Modifier.padding(top = 8.dp)
                         ) {
                             Text(
-                                text = "$speechError. Переключите демо-лекцию в настройках.",
+                                text = if (BuildConfig.DEBUG) {
+                                    "$speechError Для теста можно включить демо-лекцию в настройках."
+                                } else {
+                                    speechError.orEmpty()
+                                },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onErrorContainer,
                                 modifier = Modifier.padding(12.dp)
@@ -774,6 +803,21 @@ private fun TranscriptPanel(
                         }
                     }
                 }
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(14.dp)
+                        .align(Alignment.TopCenter)
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.surfaceContainerLow,
+                                    Color.Transparent
+                                )
+                            )
+                        )
+                )
             }
 
             Row(

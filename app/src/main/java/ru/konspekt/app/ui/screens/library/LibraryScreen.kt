@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -20,11 +19,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Sort
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,10 +44,10 @@ import ru.konspekt.app.data.Subject
 import ru.konspekt.app.ui.components.EmptyState
 import ru.konspekt.app.ui.components.NoteRow
 import ru.konspekt.app.ui.components.UserAvatar
-import ru.konspekt.app.ui.components.Wordmark
 import ru.konspekt.app.ui.theme.LocalKonspektDark
 import ru.konspekt.app.util.notesCountText
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryScreen(
     notes: List<Note>,
@@ -60,43 +64,41 @@ fun LibraryScreen(
         .filter { selectedSubject == null || it.subjectId == selectedSubject }
         .let { list -> if (newestFirst) list.sortedByDescending { it.createdAt } else list.sortedByDescending { it.durationMinutes } }
 
-    LazyColumn(
-        modifier = modifier
-            .fillMaxWidth()
-            .statusBarsPadding(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(
-            start = 20.dp,
-            end = 20.dp,
-            top = 10.dp,
-            bottom = 130.dp
-        )
-    ) {
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Wordmark()
-                Spacer(Modifier.weight(1f))
-                UserAvatar(name = "Аня", modifier = Modifier.clickable(onClick = onProfile))
-            }
-        }
-
-        item {
-            Column(modifier = Modifier.padding(top = 18.dp, bottom = 18.dp)) {
-                Text(
-                    text = "Библиотека",
-                    style = MaterialTheme.typography.headlineLarge,
-                    color = MaterialTheme.colorScheme.onSurface
+    Column(modifier = modifier.fillMaxWidth()) {
+        TopAppBar(
+            title = { Text("Библиотека") },
+            actions = {
+                UserAvatar(
+                    name = "Аня",
+                    modifier = Modifier
+                        .clickable(onClick = onProfile)
+                        .padding(end = 12.dp)
                 )
-                Spacer(Modifier.height(5.dp))
+            },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            )
+        )
+
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                start = 16.dp,
+                end = 16.dp,
+                top = 4.dp,
+                bottom = 160.dp
+            )
+        ) {
+            item {
                 Text(
                     text = "${notesCountText(notes.size)} · всё на устройстве",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                Spacer(Modifier.height(14.dp))
             }
-        }
 
         item {
             Surface(
@@ -191,6 +193,7 @@ fun LibraryScreen(
                     modifier = Modifier.padding(bottom = 10.dp)
                 )
             }
+            }
         }
     }
 }
@@ -201,18 +204,23 @@ private fun LibraryChip(
     selected: Boolean,
     onClick: () -> Unit
 ) {
-    Surface(
+    FilterChip(
+        selected = selected,
         onClick = onClick,
-        shape = CircleShape,
-        color = if (selected) MaterialTheme.colorScheme.secondaryContainer
-        else MaterialTheme.colorScheme.surfaceContainerHigh
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelLarge,
-            color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer
-            else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 15.dp, vertical = 9.dp)
+        label = { Text(text) },
+        leadingIcon = if (selected) {
+            {
+                Icon(
+                    imageVector = Icons.Rounded.Check,
+                    contentDescription = null,
+                    modifier = Modifier.size(FilterChipDefaults.IconSize)
+                )
+            }
+        } else null,
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+            selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            selectedLeadingIconColor = MaterialTheme.colorScheme.onSecondaryContainer
         )
-    }
+    )
 }

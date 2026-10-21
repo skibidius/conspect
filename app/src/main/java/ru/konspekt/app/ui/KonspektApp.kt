@@ -6,18 +6,16 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.GridView
@@ -25,7 +23,8 @@ import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.MenuBook
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -53,6 +52,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import kotlinx.coroutines.launch
+import ru.konspekt.app.BuildConfig
 import ru.konspekt.app.data.AppViewModel
 import ru.konspekt.app.ui.components.NewRecordingSheet
 import ru.konspekt.app.ui.screens.home.HomeScreen
@@ -98,10 +98,68 @@ fun KonspektApp(viewModel: AppViewModel) {
         scope.launch { snackbarHostState.showSnackbar(text) }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        bottomBar = {
+            if (isRoot) {
+                NavigationBar(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                ) {
+                    bottomDestinations.forEach { destination ->
+                        NavigationBarItem(
+                            selected = currentRoute == destination.route,
+                            onClick = {
+                                navController.navigate(destination.route) {
+                                    popUpTo("home") { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
+                            icon = {
+                                Icon(
+                                    imageVector = destination.icon,
+                                    contentDescription = destination.label,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            },
+                            label = {
+                                Text(
+                                    text = destination.label,
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                            },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                                indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        )
+                    }
+                }
+            }
+        },
+        floatingActionButton = {
+            if (isRoot) {
+                ExtendedFloatingActionButton(
+                    onClick = { openRecording(null) },
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    shape = RoundedCornerShape(20.dp),
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Rounded.Mic,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    },
+                    text = { Text("Запись") }
+                )
+            }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) {
         NavHost(
             navController = navController,
@@ -168,6 +226,9 @@ fun KonspektApp(viewModel: AppViewModel) {
                     notesCount = viewModel.notes.size,
                     subjectsCount = viewModel.subjects.size,
                     totalMinutes = viewModel.notes.sumOf { it.durationMinutes },
+                    hasDeepSeekKey = viewModel.hasDeepSeekKey,
+                    onSaveDeepSeekKey = viewModel::saveDeepSeekKey,
+                    onClearDeepSeekKey = viewModel::clearDeepSeekKey,
                     onBack = { navController.popBackStack() },
                     onSettingsChange = viewModel::updateSettings
                 )
@@ -227,54 +288,32 @@ fun KonspektApp(viewModel: AppViewModel) {
                     RecordScreen(
                         subject = subject,
                         topic = topic,
-                        demoMode = viewModel.settings.demoMode,
+                        demoMode = BuildConfig.DEBUG && viewModel.settings.demoMode,
+                        cloudMode = viewModel.settings.aiMode == ru.konspekt.app.data.AiMode.DEEPSEEK && viewModel.hasDeepSeekKey,
                         onClose = { navController.popBackStack() },
                         onFinish = { transcript, durationSeconds, demo ->
-                            val note = viewModel.createNote(
+                            viewModel.generateNote(
                                 subjectId = subject.id,
                                 topic = topic,
                                 transcript = transcript,
                                 durationMinutes = durationSeconds.coerceAtLeast(1),
                                 demo = demo
                             )
+                        },
+                        onCompleted = { result ->
                             val currentId = navController.currentDestination?.id
-                            navController.navigate("note/${note.id}") {
+                            navController.navigate("note/${result.noteId}") {
                                 if (currentId != null) {
                                     popUpTo(currentId) { inclusive = true }
                                 }
                             }
+                            result.warning?.let(::message)
                         }
                     )
                 }
             }
         }
 
-        if (isRoot) {
-            KonspektBottomBar(
-                currentRoute = currentRoute ?: "home",
-                onNavigate = { route ->
-                    navController.navigate(route) {
-                        popUpTo("home") { saveState = true }
-                        launchSingleTop = true
-                        restoreState = true
-                    }
-                },
-                onRecord = { openRecording(null) },
-                modifier = Modifier.align(Alignment.BottomCenter)
-            )
-        }
-
-        SnackbarHost(
-            hostState = snackbarHostState,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .padding(
-                    start = 16.dp,
-                    end = 16.dp,
-                    bottom = if (isRoot) 96.dp else 16.dp
-                )
-        )
     }
 
     if (showRecordingSheet) {
@@ -293,117 +332,6 @@ fun KonspektApp(viewModel: AppViewModel) {
                     "record/${Uri.encode(subjectId)}?topic=${Uri.encode(topic)}"
                 )
             }
-        )
-    }
-}
-
-@Composable
-private fun KonspektBottomBar(
-    currentRoute: String,
-    onNavigate: (String) -> Unit,
-    onRecord: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shadowElevation = 2.dp
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .height(80.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            bottomDestinations.take(2).forEach { destination ->
-                BottomBarItem(
-                    destination = destination,
-                    selected = currentRoute == destination.route,
-                    onClick = { onNavigate(destination.route) },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .clickable(onClick = onRecord),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Surface(
-                    onClick = onRecord,
-                    modifier = Modifier.size(50.dp),
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    shadowElevation = 2.dp
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Rounded.Mic,
-                            contentDescription = "Начать запись",
-                            modifier = Modifier.size(23.dp)
-                        )
-                    }
-                }
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    text = "Запись",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            bottomDestinations.drop(2).forEach { destination ->
-                BottomBarItem(
-                    destination = destination,
-                    selected = currentRoute == destination.route,
-                    onClick = { onNavigate(destination.route) },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun BottomBarItem(
-    destination: BottomDestination,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier
-            .clickable(onClick = onClick)
-            .padding(vertical = 6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Box(
-            modifier = Modifier
-                .height(30.dp)
-                .size(width = 52.dp, height = 30.dp)
-                .background(
-                    color = if (selected) MaterialTheme.colorScheme.secondaryContainer
-                    else Color.Transparent,
-                    shape = RoundedCornerShape(15.dp)
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = destination.icon,
-                contentDescription = destination.label,
-                tint = if (selected) MaterialTheme.colorScheme.onSecondaryContainer
-                else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(22.dp)
-            )
-        }
-        Spacer(Modifier.height(3.dp))
-        Text(
-            text = destination.label,
-            style = MaterialTheme.typography.labelSmall,
-            color = if (selected) MaterialTheme.colorScheme.onSurface
-            else MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }

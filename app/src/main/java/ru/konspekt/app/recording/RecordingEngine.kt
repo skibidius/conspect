@@ -1,84 +1,12 @@
 package ru.konspekt.app.recording
 
 import android.content.Context
-import android.media.MediaRecorder
 import android.os.Build
 import android.os.Bundle
-import android.os.SystemClock
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.content.Intent
-import java.io.File
-import kotlin.math.abs
-
-/**
- * Native microphone capture. Audio is written to the app cache and deleted
- * after the note is generated, so it never leaves the device.
- */
-class AudioCapture(private val context: Context) {
-    private var recorder: MediaRecorder? = null
-    private var file: File? = null
-    var isRecording = false
-        private set
-
-    fun start(): Boolean {
-        if (isRecording) return true
-        val output = File(context.cacheDir, "lecture-${SystemClock.elapsedRealtime()}.m4a")
-        val mediaRecorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            MediaRecorder(context)
-        } else {
-            @Suppress("DEPRECATION")
-            MediaRecorder()
-        }
-        return runCatching {
-            mediaRecorder.apply {
-                setAudioSource(MediaRecorder.AudioSource.MIC)
-                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-                setAudioEncodingBitRate(96_000)
-                setAudioSamplingRate(44_100)
-                setOutputFile(output.absolutePath)
-                prepare()
-                start()
-            }
-            recorder = mediaRecorder
-            file = output
-            isRecording = true
-            true
-        }.getOrElse {
-            mediaRecorder.release()
-            output.delete()
-            false
-        }
-    }
-
-    fun amplitude(): Float {
-        val value = runCatching { recorder?.maxAmplitude ?: 0 }.getOrDefault(0)
-        return (value / 32767f).coerceIn(0f, 1f)
-    }
-
-    fun pause() {
-        if (!isRecording) return
-        runCatching { recorder?.pause() }
-    }
-
-    fun resume() {
-        if (!isRecording) return
-        runCatching { recorder?.resume() }
-    }
-
-    fun stop() {
-        recorder?.let { recorder ->
-            runCatching { recorder.stop() }
-            runCatching { recorder.release() }
-        }
-        recorder = null
-        isRecording = false
-        file?.delete()
-        file = null
-    }
-}
 
 /**
  * Uses Android's built-in recognizer, explicitly preferring the offline model.
@@ -88,6 +16,7 @@ class OfflineSpeechCapture(
     private val context: Context,
     private val onPartial: (String) -> Unit,
     private val onFinal: (String) -> Unit,
+    private val onAmplitude: (Float) -> Unit,
     private val onUnavailable: (String) -> Unit
 ) : RecognitionListener {
     private var recognizer: SpeechRecognizer? = null
@@ -135,7 +64,10 @@ class OfflineSpeechCapture(
 
     override fun onReadyForSpeech(params: Bundle?) = Unit
     override fun onBeginningOfSpeech() = Unit
-    override fun onRmsChanged(rmsdB: Float) = Unit
+    override fun onRmsChanged(rmsdB: Float) {
+        val normalized = ((rmsdB + 2f) / 12f).coerceIn(0f, 1f)
+        onAmplitude(normalized)
+    }
     override fun onBufferReceived(buffer: ByteArray?) = Unit
     override fun onEndOfSpeech() = Unit
 
@@ -149,8 +81,8 @@ class OfflineSpeechCapture(
             when (error) {
                 SpeechRecognizer.ERROR_NETWORK,
                 SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Офлайн-модель не установлена"
-                SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Нет доступа к микрофону"
-                else -> "Распознавание недоступно на этом устройстве"
+                SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Нет доступа к микрофону. Разрешите его в настройках приложения."
+                else -> "Распознавание речи недоступно. Установите офлайн-пакет русского языка."
             }
         )
     }

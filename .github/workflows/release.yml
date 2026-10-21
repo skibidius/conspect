@@ -88,21 +88,21 @@ jobs:
         run: |
           APK="app/build/outputs/apk/release/app-release.apk"
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$APK"
-          cp "$APK" "Konspekt-${{ steps.version.outputs.name }}.apk"
+          cp "$APK" "Conspect-${{ steps.version.outputs.name }}.apk"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "Конспект ${{ steps.version.outputs.name }}"
+          name: "Conspect ${{ steps.version.outputs.name }}"
           tag_name: "v${{ steps.version.outputs.name }}"
           generate_release_notes: true
           append_body: true
           body: |
-            ### Конспект ${{ steps.version.outputs.name }}
-            Нативная Android-версия. Все вычисления и данные остаются на устройстве.
+            ### Conspect ${{ steps.version.outputs.name }}
+            Нативная Android-версия. По умолчанию всё обрабатывается на устройстве; DeepSeek подключается по желанию.
 
-            **Файл:** `Konspekt-${{ steps.version.outputs.name }}.apk` — подписан release-ключом.
-          files: Konspekt-${{ steps.version.outputs.name }}.apk
+            **Файл:** `Conspect-${{ steps.version.outputs.name }}.apk` — подписан release-ключом.
+          files: Conspect-${{ steps.version.outputs.name }}.apk
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -110,6 +110,6 @@ jobs:
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Konspekt-${{ steps.version.outputs.name }}-signed
-          path: Konspekt-${{ steps.version.outputs.name }}.apk
+          name: Conspect-${{ steps.version.outputs.name }}-signed
+          path: Conspect-${{ steps.version.outputs.name }}.apk
           if-no-files-found: error

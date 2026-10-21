@@ -110,14 +110,22 @@ data class ScheduleItem(
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
+enum class AiMode { LOCAL, DEEPSEEK }
+
 enum class Palette { SAGE, SKY, LAVENDER, CLAY }
 
 data class UserSettings(
     val userName: String = "Аня",
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val palette: Palette = Palette.SAGE,
-    val dynamicColor: Boolean = false,
+    val dynamicColor: Boolean = true,
     val filterTangents: Boolean = true,
     val autoStructure: Boolean = true,
-    val demoMode: Boolean = true
+    val aiMode: AiMode = AiMode.LOCAL,
+    val demoMode: Boolean = false
+)
+
+data class NoteGenerationResult(
+    val noteId: String,
+    val warning: String? = null
 )

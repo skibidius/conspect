@@ -3,6 +3,7 @@ package ru.konspekt.app.data
 import android.content.Context
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import org.json.JSONObject
 
 class AppRepository(context: Context) {
     private val prefs = context.getSharedPreferences("konspekt_local", Context.MODE_PRIVATE)
@@ -10,7 +11,31 @@ class AppRepository(context: Context) {
 
     fun loadSettings(): UserSettings {
         val raw = prefs.getString(KEY_SETTINGS, null) ?: return UserSettings()
-        return runCatching { gson.fromJson(raw, UserSettings::class.java) }.getOrDefault(UserSettings())
+        return runCatching {
+            val json = JSONObject(raw)
+            UserSettings(
+                userName = json.optString("userName", "Аня").ifBlank { "Аня" },
+                themeMode = when (json.optString("themeMode")) {
+                    "LIGHT" -> ThemeMode.LIGHT
+                    "DARK" -> ThemeMode.DARK
+                    else -> ThemeMode.SYSTEM
+                },
+                palette = when (json.optString("palette")) {
+                    "SKY" -> Palette.SKY
+                    "LAVENDER" -> Palette.LAVENDER
+                    "CLAY" -> Palette.CLAY
+                    else -> Palette.SAGE
+                },
+                dynamicColor = json.optBoolean("dynamicColor", true),
+                filterTangents = json.optBoolean("filterTangents", true),
+                autoStructure = json.optBoolean("autoStructure", true),
+                aiMode = when (json.optString("aiMode")) {
+                    "DEEPSEEK" -> AiMode.DEEPSEEK
+                    else -> AiMode.LOCAL
+                },
+                demoMode = json.optBoolean("demoMode", false)
+            )
+        }.getOrDefault(UserSettings())
     }
 
     fun saveSettings(settings: UserSettings) {

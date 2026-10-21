@@ -75,7 +75,7 @@ object SeedData {
         \geometry{margin=2.4cm}
 
         \title{Производная сложной функции}
-        \author{Конспект}
+        \author{Conspect}
         \date{\today}
 
         \begin{document}

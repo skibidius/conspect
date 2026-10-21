@@ -7,38 +7,38 @@
     <!-- Back page -->
     <path
         android:fillColor="#CBD7C9"
-        android:pathData="M34,39C34,34.58 37.58,31 42,31H60L65,36V82C65,86.42 61.42,90 57,90H42C37.58,90 34,86.42 34,82Z" />
+        android:pathData="M35,40C35,36.13 38.13,33 42,33H58L63,38V78C63,81.87 59.87,85 56,85H42C38.13,85 35,81.87 35,78Z" />
 
     <!-- Front page -->
     <path
         android:fillColor="#FBF9F4"
-        android:pathData="M40,31C40,27.13 43.13,24 47,24H63L72,33V73C72,76.87 68.87,80 65,80H47C43.13,80 40,76.87 40,73Z" />
+        android:pathData="M39,34C39,30.13 42.13,27 46,27H60L69,36V73C69,76.87 65.87,80 62,80H46C42.13,80 39,76.87 39,73Z" />
     <path
         android:fillColor="#DCE3D8"
-        android:pathData="M63,24V30C63,31.66 64.34,33 66,33H72Z" />
+        android:pathData="M60,27V33C60,34.66 61.34,36 63,36H69Z" />
 
     <!-- Ruled lines -->
     <path
         android:strokeColor="#6F8374"
-        android:strokeWidth="2.6"
+        android:strokeWidth="2.3"
         android:strokeLineCap="round"
-        android:pathData="M47,45H64" />
+        android:pathData="M46,45H62" />
     <path
         android:strokeColor="#6F8374"
-        android:strokeWidth="2.6"
+        android:strokeWidth="2.3"
         android:strokeLineCap="round"
-        android:pathData="M47,53H60" />
+        android:pathData="M46,53H59" />
     <path
         android:strokeColor="#9AAC9C"
-        android:strokeWidth="2.2"
+        android:strokeWidth="2"
         android:strokeLineCap="round"
-        android:pathData="M47,61H62" />
+        android:pathData="M46,61H60" />
 
     <!-- Sparkle -->
     <path
         android:fillColor="#44584A"
-        android:pathData="M78,16C79.3,21.9 81.1,23.7 87,25C81.1,26.3 79.3,28.1 78,34C76.7,28.1 74.9,26.3 69,25C74.9,23.7 76.7,21.9 78,16Z" />
+        android:pathData="M72,27C73.05,31.85 74.65,33.45 79.5,34.5C74.65,35.55 73.05,37.15 72,42C70.95,37.15 69.35,35.55 64.5,34.5C69.35,33.45 70.95,31.85 72,27Z" />
     <path
         android:fillColor="#B58D70"
-        android:pathData="M84,38C84.55,40.45 85.55,41.45 88,42C85.55,42.55 84.55,43.55 84,46C83.45,43.55 82.45,42.55 80,42C82.45,41.45 83.45,40.45 84,38Z" />
+        android:pathData="M76.5,45C76.9,46.9 77.8,47.8 79.7,48.2C77.8,48.6 76.9,49.5 76.5,51.4C76.1,49.5 75.2,48.6 73.3,48.2C75.2,47.8 76.1,46.9 76.5,45Z" />
 </vector>

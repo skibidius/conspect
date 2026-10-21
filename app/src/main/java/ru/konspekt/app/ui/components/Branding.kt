@@ -56,7 +56,7 @@ fun Wordmark(modifier: Modifier = Modifier) {
         KonspektLogo()
         Spacer(Modifier.width(10.dp))
         Text(
-            text = "конспект",
+            text = "conspect",
             style = MaterialTheme.typography.titleLarge.copy(
                 fontWeight = FontWeight.SemiBold,
                 letterSpacing = (-0.7).sp

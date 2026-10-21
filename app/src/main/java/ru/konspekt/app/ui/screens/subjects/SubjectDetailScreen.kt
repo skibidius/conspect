@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -30,6 +29,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,6 +45,7 @@ import ru.konspekt.app.ui.components.NoteRow
 import ru.konspekt.app.ui.theme.LocalKonspektDark
 import ru.konspekt.app.util.notesCountText
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun SubjectDetailScreen(
     subject: Subject,
@@ -58,62 +60,49 @@ fun SubjectDetailScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .statusBarsPadding()
             .navigationBarsPadding()
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = "Назад",
-                    tint = MaterialTheme.colorScheme.onSurface
-                )
-            }
-            Text(
-                text = subject.shortName,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f)
+        TopAppBar(
+            title = { Text(subject.shortName) },
+            navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = "Назад"
+                    )
+                }
+            },
+            actions = {
+                IconButton(onClick = onRecord) {
+                    Icon(
+                        imageVector = Icons.Rounded.Mic,
+                        contentDescription = "Записать лекцию",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.surface
             )
-            IconButton(onClick = onRecord) {
-                Icon(
-                    imageVector = Icons.Rounded.Mic,
-                    contentDescription = "Записать лекцию",
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-        }
+        )
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                start = 20.dp,
-                end = 20.dp,
+                start = 16.dp,
+                end = 16.dp,
                 top = 4.dp,
-                bottom = 32.dp
+                bottom = 24.dp
             )
         ) {
             item {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(30.dp),
+                    shape = RoundedCornerShape(24.dp),
                     color = subject.tone.container(dark)
                 ) {
                     Box {
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(top = 18.dp, end = 22.dp)
-                                .size(94.dp)
-                                .clip(CircleShape)
-                                .background(subject.tone.onContainer(dark).copy(alpha = 0.06f))
-                        )
-                        Column(modifier = Modifier.padding(22.dp)) {
+                        Column(modifier = Modifier.padding(20.dp)) {
                             Box(
                                 modifier = Modifier
                                     .size(64.dp)

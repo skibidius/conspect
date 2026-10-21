@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -47,6 +46,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -84,7 +85,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun NoteScreen(
     note: Note,
@@ -115,7 +116,7 @@ fun NoteScreen(
                 if (section.formula != null) appendLine(section.formula)
             }
             appendLine()
-            append("Создано в Конспекте")
+            append("Создано в Conspect")
         }
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
@@ -137,94 +138,89 @@ fun NoteScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .statusBarsPadding()
             .navigationBarsPadding()
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = "Назад",
-                    tint = MaterialTheme.colorScheme.onSurface
-                )
-            }
-            Text(
-                text = "Конспект",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f)
-            )
-            IconButton(onClick = { shareNote() }) {
-                Icon(
-                    imageVector = Icons.Rounded.Share,
-                    contentDescription = "Поделиться",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            IconButton(onClick = { exportPdf() }, enabled = !exporting) {
-                if (exporting) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        strokeWidth = 2.dp
-                    )
-                } else {
+        TopAppBar(
+            title = { Text("Conspect") },
+            navigationIcon = {
+                IconButton(onClick = onBack) {
                     Icon(
-                        imageVector = Icons.Rounded.Download,
-                        contentDescription = "Экспорт в PDF",
-                        tint = MaterialTheme.colorScheme.primary
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = "Назад"
                     )
                 }
-            }
-            Box {
-                IconButton(onClick = { menuOpen = true }) {
+            },
+            actions = {
+                IconButton(onClick = { shareNote() }) {
                     Icon(
-                        imageVector = Icons.Rounded.MoreVert,
-                        contentDescription = "Ещё",
+                        imageVector = Icons.Rounded.Share,
+                        contentDescription = "Поделиться",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                    DropdownMenuItem(
-                        text = { Text("Показать LaTeX") },
-                        onClick = {
-                            menuOpen = false
-                            showLatex = true
-                        },
-                        leadingIcon = { Icon(Icons.Rounded.Code, contentDescription = null) }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Экспорт в PDF") },
-                        onClick = {
-                            menuOpen = false
-                            exportPdf()
-                        },
-                        leadingIcon = { Icon(Icons.Rounded.PictureAsPdf, contentDescription = null) }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Скопировать текст") },
-                        onClick = {
-                            menuOpen = false
-                            clipboard.setText(AnnotatedString(note.summary))
-                            onMessage("Текст скопирован")
-                        },
-                        leadingIcon = { Icon(Icons.Rounded.ContentCopy, contentDescription = null) }
-                    )
+                IconButton(onClick = { exportPdf() }, enabled = !exporting) {
+                    if (exporting) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Rounded.Download,
+                            contentDescription = "Экспорт в PDF",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
-            }
-        }
+                Box {
+                    IconButton(onClick = { menuOpen = true }) {
+                        Icon(
+                            imageVector = Icons.Rounded.MoreVert,
+                            contentDescription = "Ещё",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                        DropdownMenuItem(
+                            text = { Text("Показать LaTeX") },
+                            onClick = {
+                                menuOpen = false
+                                showLatex = true
+                            },
+                            leadingIcon = { Icon(Icons.Rounded.Code, contentDescription = null) }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Экспорт в PDF") },
+                            onClick = {
+                                menuOpen = false
+                                exportPdf()
+                            },
+                            leadingIcon = { Icon(Icons.Rounded.PictureAsPdf, contentDescription = null) }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Скопировать текст") },
+                            onClick = {
+                                menuOpen = false
+                                clipboard.setText(AnnotatedString(note.summary))
+                                onMessage("Текст скопирован")
+                            },
+                            leadingIcon = { Icon(Icons.Rounded.ContentCopy, contentDescription = null) }
+                        )
+                    }
+                }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            )
+        )
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                start = 20.dp,
-                end = 20.dp,
-                top = 8.dp,
-                bottom = 40.dp
+                start = 16.dp,
+                end = 16.dp,
+                top = 4.dp,
+                bottom = 24.dp
             )
         ) {
             item {

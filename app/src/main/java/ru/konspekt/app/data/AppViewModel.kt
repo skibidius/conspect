@@ -12,6 +12,8 @@ import java.util.UUID
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = AppRepository(application)
+    private val apiKeyStore = ApiKeyStore(application)
+    private val deepSeek = DeepSeekClient()
 
     var settings by mutableStateOf(repository.loadSettings())
         private set
@@ -22,6 +24,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     var notes by mutableStateOf(
         (repository.loadNotes() + SeedData.notes).sortedByDescending { it.createdAt }
     )
+        private set
+
+    var hasDeepSeekKey by mutableStateOf(apiKeyStore.hasKey())
         private set
 
     fun updateSettings(transform: (UserSettings) -> UserSettings) {
@@ -57,48 +62,102 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         return subject
     }
 
-    fun createNote(
+    fun saveDeepSeekKey(key: String) {
+        apiKeyStore.save(key)
+        hasDeepSeekKey = apiKeyStore.hasKey()
+    }
+
+    fun clearDeepSeekKey() {
+        apiKeyStore.clear()
+        hasDeepSeekKey = false
+    }
+
+    suspend fun generateNote(
         subjectId: String,
         topic: String,
         transcript: List<String>,
         durationMinutes: Int,
-        demo: Boolean = true
-    ): Note {
+        demo: Boolean = false
+    ): NoteGenerationResult {
         val subject = subject(subjectId) ?: subjects.first()
-        val curated = if (demo) curatedNoteFor(subject) else null
         val now = Date()
         val date = SimpleDateFormat("d MMMM", Locale("ru")).format(now)
         val time = SimpleDateFormat("HH:mm", Locale("ru")).format(now)
+        val curated = if (demo) curatedNoteFor(subject) else null
+        val resolvedTopic = topic.ifBlank {
+            transcript.firstOrNull { it.isNotBlank() }?.trim()?.take(64)?.trimEnd()
+                ?: "Новая лекция"
+        }
 
-        val generated = if (curated != null) {
-            curated.copy(
+        if (curated != null) {
+            val note = curated.copy(
                 id = "note-${UUID.randomUUID()}",
-                subjectId = subjectId,
+                subjectId = subject.id,
                 title = topic.ifBlank { curated.title },
                 dateLabel = date,
                 timeLabel = time,
                 createdAt = now.time,
                 durationMinutes = durationMinutes.coerceAtLeast(1)
             )
-        } else {
-            LocalLectureStructurer.build(
+            saveGeneratedNote(note)
+            return NoteGenerationResult(note.id)
+        }
+
+        val cloudKey = apiKeyStore.load()
+        if (settings.aiMode == AiMode.DEEPSEEK && !cloudKey.isNullOrBlank()) {
+            val cloudNote = runCatching {
+                deepSeek.generate(
+                    apiKey = cloudKey,
+                    subject = subject,
+                    topic = topic,
+                    transcript = transcript,
+                    durationMinutes = durationMinutes,
+                    filterTangents = settings.filterTangents
+                )
+            }.getOrNull()
+            if (cloudNote != null) {
+                saveGeneratedNote(cloudNote)
+                return NoteGenerationResult(cloudNote.id)
+            }
+            val fallback = LocalLectureStructurer.build(
                 subject = subject,
-                topic = topic.ifBlank { "Новая лекция" },
+                topic = resolvedTopic,
                 transcript = transcript,
                 durationMinutes = durationMinutes,
                 dateLabel = date,
                 timeLabel = time,
                 filterTangents = settings.filterTangents
             )
+            saveGeneratedNote(fallback)
+            return NoteGenerationResult(
+                fallback.id,
+                "DeepSeek недоступен. Конспект собран локально."
+            )
         }
 
-        val saved = generated.copy(
-            summary = generated.summary,
-            skipped = if (settings.filterTangents) generated.skipped else emptyList()
+        val local = LocalLectureStructurer.build(
+            subject = subject,
+            topic = resolvedTopic,
+            transcript = transcript,
+            durationMinutes = durationMinutes,
+            dateLabel = date,
+            timeLabel = time,
+            filterTangents = settings.filterTangents
         )
-        notes = (listOf(saved) + notes).sortedByDescending { it.createdAt }
+        saveGeneratedNote(local)
+        return NoteGenerationResult(
+            local.id,
+            if (settings.aiMode == AiMode.DEEPSEEK) {
+                "Добавьте API-ключ DeepSeek — пока конспект собран локально."
+            } else {
+                null
+            }
+        )
+    }
+
+    private fun saveGeneratedNote(note: Note) {
+        notes = (listOf(note) + notes).sortedByDescending { it.createdAt }
         persistLocalNotes()
-        return saved
     }
 
     fun deleteNote(id: String) {

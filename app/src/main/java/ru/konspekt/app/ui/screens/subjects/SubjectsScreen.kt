@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -35,6 +34,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -55,11 +56,11 @@ import ru.konspekt.app.data.SubjectIcon
 import ru.konspekt.app.data.SubjectTone
 import ru.konspekt.app.ui.components.SubjectIconBadge
 import ru.konspekt.app.ui.components.UserAvatar
-import ru.konspekt.app.ui.components.Wordmark
 import ru.konspekt.app.ui.theme.LocalKonspektDark
 import ru.konspekt.app.util.notesCountText
 import ru.konspekt.app.util.subjectsCountText
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun SubjectsScreen(
     subjects: List<Subject>,
@@ -73,54 +74,58 @@ fun SubjectsScreen(
     var showAddDialog by remember { mutableStateOf(false) }
     val totalNotes = subjects.sumOf { notesCount(it.id) }
 
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
-        modifier = modifier
-            .fillMaxWidth()
-            .statusBarsPadding(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(
-            start = 20.dp,
-            end = 20.dp,
-            top = 10.dp,
-            bottom = 130.dp
-        ),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Wordmark()
-                Spacer(Modifier.weight(1f))
-                UserAvatar(name = "Аня", modifier = Modifier.clickable(onClick = onProfile))
-            }
-        }
-
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            Column(modifier = Modifier.padding(top = 18.dp)) {
-                Text(
-                    text = "Предметы",
-                    style = MaterialTheme.typography.headlineLarge,
-                    color = MaterialTheme.colorScheme.onSurface
+    Column(modifier = modifier.fillMaxWidth()) {
+        TopAppBar(
+            title = { Text("Предметы") },
+            actions = {
+                IconButton(onClick = { showAddDialog = true }) {
+                    Icon(
+                        imageVector = Icons.Rounded.Add,
+                        contentDescription = "Добавить предмет",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                UserAvatar(
+                    name = "Аня",
+                    modifier = Modifier
+                        .clickable(onClick = onProfile)
+                        .padding(end = 12.dp)
                 )
-                Spacer(Modifier.height(5.dp))
+            },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            )
+        )
+
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                start = 16.dp,
+                end = 16.dp,
+                top = 4.dp,
+                bottom = 160.dp
+            ),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
                 Text(
                     text = "${subjectsCountText(subjects.size)} · ${notesCountText(totalNotes)}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-        }
 
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            SemesterSummaryCard(
-                subjectsCount = subjects.size,
-                notesCount = totalNotes,
-                minutes = subjects.sumOf { totalMinutes(it.id) }
-            )
-        }
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                SemesterSummaryCard(
+                    subjectsCount = subjects.size,
+                    notesCount = totalNotes,
+                    minutes = subjects.sumOf { totalMinutes(it.id) }
+                )
+            }
 
         items(subjects, key = { it.id }) { subject ->
             SubjectGridCard(
@@ -131,8 +136,9 @@ fun SubjectsScreen(
             )
         }
 
-        item {
-            AddSubjectCard(onClick = { showAddDialog = true })
+            item {
+                AddSubjectCard(onClick = { showAddDialog = true })
+            }
         }
     }
 
@@ -222,18 +228,10 @@ private fun SubjectGridCard(
         modifier = Modifier
             .fillMaxWidth()
             .height(206.dp),
-        shape = RoundedCornerShape(26.dp),
+        shape = RoundedCornerShape(24.dp),
         color = container
     ) {
         Box {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 18.dp, end = 18.dp)
-                    .size(60.dp)
-                    .clip(CircleShape)
-                    .background(onContainer.copy(alpha = 0.06f))
-            )
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
@@ -301,7 +299,7 @@ private fun AddSubjectCard(onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .height(206.dp),
-        shape = RoundedCornerShape(26.dp),
+        shape = RoundedCornerShape(24.dp),
         color = Color.Transparent
     ) {
         Column(
