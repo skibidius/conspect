@@ -9,8 +9,9 @@ import android.speech.SpeechRecognizer
 import android.content.Intent
 
 /**
- * Uses Android's built-in recognizer, explicitly preferring the offline model.
- * No network permission is declared by the app.
+ * Uses Android's on-device recognizer (API 31+) when available and falls back
+ * to the standard recognizer with an offline preference. Audio never leaves
+ * the device in local mode.
  */
 class OfflineSpeechCapture(
     private val context: Context,
@@ -24,15 +25,20 @@ class OfflineSpeechCapture(
     private var restartOnResults = true
 
     fun start(): Boolean {
-        if (!SpeechRecognizer.isRecognitionAvailable(context)) {
-            onUnavailable("Офлайн-распознавание недоступно")
-            return false
-        }
         stopped = false
         val created = runCatching {
-            SpeechRecognizer.createSpeechRecognizer(context)
-        }.getOrNull() ?: run {
-            onUnavailable("Офлайн-распознавание недоступно")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
+            ) {
+                SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
+            } else if (SpeechRecognizer.isRecognitionAvailable(context)) {
+                SpeechRecognizer.createSpeechRecognizer(context)
+            } else {
+                null
+            }
+        }.getOrNull()
+        if (created == null) {
+            onUnavailable("Распознавание речи недоступно")
             return false
         }
         recognizer = created

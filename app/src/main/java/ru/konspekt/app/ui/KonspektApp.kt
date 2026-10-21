@@ -144,7 +144,13 @@ fun KonspektApp(viewModel: AppViewModel) {
         floatingActionButton = {
             if (isRoot) {
                 ExtendedFloatingActionButton(
-                    onClick = { openRecording(null) },
+                    onClick = {
+                        if (viewModel.subjects.isEmpty()) {
+                            navController.navigate("subjects")
+                        } else {
+                            openRecording(null)
+                        }
+                    },
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     shape = RoundedCornerShape(20.dp),
@@ -175,7 +181,6 @@ fun KonspektApp(viewModel: AppViewModel) {
                     userName = viewModel.settings.userName,
                     subjects = viewModel.subjects,
                     notes = viewModel.notes,
-                    schedule = ru.konspekt.app.data.SeedData.schedule,
                     notesCount = viewModel::notesCount,
                     onOpenNote = { navController.navigate("note/$it") },
                     onOpenSubject = { navController.navigate("subject/$it") },
@@ -288,7 +293,7 @@ fun KonspektApp(viewModel: AppViewModel) {
                     RecordScreen(
                         subject = subject,
                         topic = topic,
-                        demoMode = BuildConfig.DEBUG && viewModel.settings.demoMode,
+                        demoMode = BuildConfig.DEBUG,
                         cloudMode = viewModel.settings.aiMode == ru.konspekt.app.data.AiMode.DEEPSEEK && viewModel.hasDeepSeekKey,
                         onClose = { navController.popBackStack() },
                         onFinish = { transcript, durationSeconds, demo ->
@@ -321,7 +326,6 @@ fun KonspektApp(viewModel: AppViewModel) {
             subjects = viewModel.subjects,
             initialSubjectId = preselectedSubject,
             filterTangents = viewModel.settings.filterTangents,
-            demoMode = viewModel.settings.demoMode,
             onFilterChange = { enabled ->
                 viewModel.updateSettings { it.copy(filterTangents = enabled) }
             },

@@ -6,9 +6,8 @@ import java.util.Locale
 import java.util.UUID
 
 /**
- * Fully on-device note structurer used by the demo pipeline.
- * It removes digressions and turns a transcript into a readable note shell.
- * No audio or text ever leaves the device.
+ * Fully on-device note structurer. It removes digressions and turns a
+ * transcript into a readable note shell without any network access.
  */
 object LocalLectureStructurer {
 

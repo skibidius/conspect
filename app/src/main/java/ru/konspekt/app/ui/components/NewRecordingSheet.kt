@@ -53,7 +53,6 @@ fun NewRecordingSheet(
     subjects: List<Subject>,
     initialSubjectId: String?,
     filterTangents: Boolean,
-    demoMode: Boolean,
     onFilterChange: (Boolean) -> Unit,
     onDismiss: () -> Unit,
     onStart: (subjectId: String, topic: String) -> Unit
@@ -197,8 +196,7 @@ fun NewRecordingSheet(
                 )
                 Spacer(Modifier.width(5.dp))
                 Text(
-                    text = if (demoMode) "Демо-лекция · всё остаётся на устройстве"
-                    else "Аудио не покидает устройство",
+                    text = "Аудио не покидает устройство",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

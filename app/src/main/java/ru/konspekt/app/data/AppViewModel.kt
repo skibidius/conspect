@@ -1,6 +1,7 @@
 package ru.konspekt.app.data
 
 import android.app.Application
+import ru.konspekt.app.BuildConfig
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -18,11 +19,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     var settings by mutableStateOf(repository.loadSettings())
         private set
 
-    var subjects by mutableStateOf(SeedData.subjects + repository.loadSubjects())
+    private val debugFixtures = BuildConfig.DEBUG
+
+    var subjects by mutableStateOf(
+        (if (debugFixtures) SeedData.subjects else emptyList()) + repository.loadSubjects()
+    )
         private set
 
     var notes by mutableStateOf(
-        (repository.loadNotes() + SeedData.notes).sortedByDescending { it.createdAt }
+        (repository.loadNotes() + if (debugFixtures) SeedData.notes else emptyList())
+            .sortedByDescending { it.createdAt }
     )
         private set
 

@@ -29,7 +29,6 @@ import androidx.compose.material.icons.rounded.FilterAlt
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.SmartToy
 import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.Visibility
@@ -120,6 +119,23 @@ fun ProfileScreen(
                 .padding(top = 4.dp, bottom = 36.dp)
         ) {
             ProfileHeader(settings.userName)
+            Spacer(Modifier.height(12.dp))
+            SettingsCard {
+                SettingHeader(
+                    icon = Icons.Rounded.Person,
+                    title = "Имя",
+                    subtitle = "Как к вам обращаться"
+                )
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = settings.userName,
+                    onValueChange = { value -> onSettingsChange { it.copy(userName = value) } },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Имя") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(14.dp)
+                )
+            }
             Spacer(Modifier.height(14.dp))
             StatsRow(notesCount = notesCount, subjectsCount = subjectsCount, totalMinutes = totalMinutes)
 
@@ -290,20 +306,7 @@ fun ProfileScreen(
                         onSettingsChange { it.copy(filterTangents = enabled) }
                     }
                 )
-                if (BuildConfig.DEBUG) {
-                    Spacer(Modifier.height(12.dp))
-                    DividerLine()
-                    Spacer(Modifier.height(12.dp))
-                    SwitchRow(
-                        icon = Icons.Rounded.PlayCircle,
-                        title = "Демо-лекция",
-                        subtitle = "Только для отладки",
-                        checked = settings.demoMode,
-                        onCheckedChange = { enabled ->
-                            onSettingsChange { it.copy(demoMode = enabled) }
-                        }
-                    )
-                }
+
             }
 
             Spacer(Modifier.height(26.dp))
@@ -378,50 +381,27 @@ fun ProfileScreen(
 private fun ProfileHeader(name: String) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(28.dp),
+        shape = RoundedCornerShape(24.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Row(
-            modifier = Modifier.padding(20.dp),
+            modifier = Modifier.padding(18.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            UserAvatar(name = name, size = 66.dp)
-            Spacer(Modifier.size(16.dp))
+            UserAvatar(name = name, size = 56.dp)
+            Spacer(Modifier.size(14.dp))
             Column {
                 Text(
-                    text = "$name Смирнова",
+                    text = name,
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    text = "2 курс · прикладная математика",
+                    text = "Данные хранятся только на устройстве",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(Modifier.height(8.dp))
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.secondaryContainer
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Person,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Spacer(Modifier.size(4.dp))
-                        Text(
-                            text = "Локальный профиль",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                    }
-                }
             }
         }
     }

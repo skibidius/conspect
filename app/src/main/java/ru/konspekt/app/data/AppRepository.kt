@@ -28,12 +28,10 @@ class AppRepository(context: Context) {
                 },
                 dynamicColor = json.optBoolean("dynamicColor", true),
                 filterTangents = json.optBoolean("filterTangents", true),
-                autoStructure = json.optBoolean("autoStructure", true),
                 aiMode = when (json.optString("aiMode")) {
                     "DEEPSEEK" -> AiMode.DEEPSEEK
                     else -> AiMode.LOCAL
-                },
-                demoMode = json.optBoolean("demoMode", false)
+                }
             )
         }.getOrDefault(UserSettings())
     }

@@ -115,14 +115,12 @@ enum class AiMode { LOCAL, DEEPSEEK }
 enum class Palette { SAGE, SKY, LAVENDER, CLAY }
 
 data class UserSettings(
-    val userName: String = "Аня",
+    val userName: String = "Студент",
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val palette: Palette = Palette.SAGE,
     val dynamicColor: Boolean = true,
     val filterTangents: Boolean = true,
-    val autoStructure: Boolean = true,
-    val aiMode: AiMode = AiMode.LOCAL,
-    val demoMode: Boolean = false
+    val aiMode: AiMode = AiMode.LOCAL
 )
 
 data class NoteGenerationResult(
