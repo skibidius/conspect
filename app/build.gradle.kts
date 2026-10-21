@@ -109,6 +109,7 @@ dependencies {
     implementation("io.github.huarangmeng:latex-renderer:1.6.1")
     implementation("io.github.huarangmeng:latex-fonts-katex:1.6.1")
     implementation("com.google.code.gson:gson:2.11.0")
+    implementation("com.alphacephei:vosk-android:0.3.47")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

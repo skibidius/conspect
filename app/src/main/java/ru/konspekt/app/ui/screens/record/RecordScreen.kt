@@ -86,7 +86,7 @@ import kotlinx.coroutines.delay
 import ru.konspekt.app.BuildConfig
 import ru.konspekt.app.data.NoteGenerationResult
 import ru.konspekt.app.data.Subject
-import ru.konspekt.app.recording.OfflineSpeechCapture
+import ru.konspekt.app.recording.VoskSpeechCapture
 import ru.konspekt.app.ui.components.KonspektLogo
 import ru.konspekt.app.ui.theme.LocalKonspektDark
 import java.util.Locale
@@ -144,6 +144,7 @@ fun RecordScreen(
     var nextDemoIndex by remember { mutableIntStateOf(if (demoMode) 4 else 0) }
     var partialText by remember { mutableStateOf("") }
     var speechError by remember { mutableStateOf<String?>(null) }
+    var recognitionStatus by remember { mutableStateOf<String?>(null) }
     var showCloseDialog by remember { mutableStateOf(false) }
     var showNoSpeechDialog by remember { mutableStateOf(false) }
     var processingStep by remember { mutableIntStateOf(0) }
@@ -159,7 +160,7 @@ fun RecordScreen(
     }
 
     val speechCapture = remember {
-        OfflineSpeechCapture(
+        VoskSpeechCapture(
             context = context,
             onPartial = { partialText = it },
             onFinal = { text ->
@@ -175,7 +176,8 @@ fun RecordScreen(
                 }
             },
             onAmplitude = { amplitude = it },
-            onUnavailable = { message ->
+            onStatus = { status -> recognitionStatus = status },
+            onError = { message ->
                 speechError = message
                 partialText = ""
             }
@@ -399,6 +401,7 @@ fun RecordScreen(
             lines = lines,
             partialText = partialText,
             speechError = speechError,
+            statusText = recognitionStatus,
             active = active,
             demoMode = demoMode,
             listState = transcriptState,
@@ -670,6 +673,7 @@ private fun TranscriptPanel(
     lines: List<TranscriptLine>,
     partialText: String,
     speechError: String?,
+    statusText: String?,
     active: Boolean,
     demoMode: Boolean,
     listState: androidx.compose.foundation.lazy.LazyListState,
@@ -776,7 +780,11 @@ private fun TranscriptPanel(
                             )
                             Spacer(Modifier.width(6.dp))
                             Text(
-                                text = if (demoMode) "ИИ слушает лекцию…" else "Слушаю микрофон…",
+                                text = if (demoMode) {
+                                    "Демо-лекция"
+                                } else {
+                                    statusText?.takeIf { it != "Готово" } ?: "Слушаю микрофон…"
+                                },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.primary
                             )
@@ -791,11 +799,7 @@ private fun TranscriptPanel(
                             modifier = Modifier.padding(top = 8.dp)
                         ) {
                             Text(
-                                text = if (BuildConfig.DEBUG) {
-                                    "$speechError Для теста можно включить демо-лекцию в настройках."
-                                } else {
-                                    speechError.orEmpty()
-                                },
+                                text = speechError.orEmpty(),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onErrorContainer,
                                 modifier = Modifier.padding(12.dp)
