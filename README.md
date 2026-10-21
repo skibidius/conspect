@@ -6,6 +6,8 @@
 
 Всё работает локально: без аккаунта, облака и отправки аудио на сервер.
 
+**[Скачать подписанный APK](https://github.com/skibidius/conspect/releases/latest)**
+
 <p align="center">
   <img src="docs/screenshots/home.png" width="31%" alt="Главный экран">
   <img src="docs/screenshots/record.png" width="31%" alt="Запись лекции">
