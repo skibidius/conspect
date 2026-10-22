@@ -790,11 +790,7 @@ private fun TranscriptPanel(
                             )
                             Spacer(Modifier.width(6.dp))
                             Text(
-                                text = if (demoMode) {
-                                    "Демо-лекция"
-                                } else {
-                                    statusText?.takeIf { it != "Готово" } ?: "Слушаю микрофон…"
-                                },
+                                text = statusText?.takeIf { it != "Готово" } ?: "Слушаю микрофон…",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.primary
                             )
