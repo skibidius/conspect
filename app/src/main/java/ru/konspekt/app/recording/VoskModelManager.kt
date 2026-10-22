@@ -1,5 +1,6 @@
 package ru.konspekt.app.recording
 
+import android.app.ActivityManager
 import android.content.Context
 import org.vosk.Model
 import java.io.File
@@ -37,7 +38,7 @@ enum class VoskModel(
         id = "accurate",
         title = "Точная",
         sizeLabel = "1,8 ГБ",
-        description = "Заметно точнее. Нужно 6+ ГБ RAM и много свободного места.",
+        description = "Заметно точнее. Нужно 16+ ГБ RAM и много свободного места.",
         url = "https://alphacephei.com/vosk/models/vosk-model-ru-0.42.zip",
         dirName = "vosk-model-ru-accurate",
         approxBytes = 1_800L * 1024 * 1024
@@ -60,11 +61,35 @@ object VoskModelManager {
 
     fun selected(context: Context): VoskModel {
         val id = prefs(context).getString(KEY_MODEL, VoskModel.COMPACT.id)
-        return VoskModel.entries.firstOrNull { it.id == id } ?: VoskModel.COMPACT
+        val model = VoskModel.entries.firstOrNull { it.id == id } ?: VoskModel.COMPACT
+        if (!canUse(context, model)) {
+            prefs(context).edit().putString(KEY_MODEL, VoskModel.COMPACT.id).apply()
+            return VoskModel.COMPACT
+        }
+        return model
     }
 
-    fun select(context: Context, model: VoskModel) {
+    /**
+     * The accurate model needs a lot of native memory. On phones with less RAM
+     * Android kills the process while Vosk is decoding, so we refuse to load it
+     * there and keep using the compact model.
+     */
+    fun canUse(context: Context, model: VoskModel = selected(context)): Boolean {
+        if (model != VoskModel.ACCURATE) return true
+        return runCatching {
+            val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            val info = ActivityManager.MemoryInfo()
+            manager.getMemoryInfo(info)
+            val totalGb = info.totalMem.toDouble() / (1024.0 * 1024.0 * 1024.0)
+            val availableGb = info.availMem.toDouble() / (1024.0 * 1024.0 * 1024.0)
+            totalGb >= 14.0 && availableGb >= 5.0
+        }.getOrDefault(false)
+    }
+
+    fun select(context: Context, model: VoskModel): Boolean {
+        if (!canUse(context, model)) return false
         prefs(context).edit().putString(KEY_MODEL, model.id).apply()
+        return true
     }
 
     fun isReady(context: Context, model: VoskModel = selected(context)): Boolean =
@@ -75,6 +100,7 @@ object VoskModelManager {
         model: VoskModel = selected(context),
         onProgress: (Float) -> Unit = {}
     ): Model? = withContext(Dispatchers.IO) {
+        if (!canUse(context, model)) return@withContext null
         synchronized(lock) {
             if (loadedModelId == model.id) {
                 loadedModel?.let { return@withContext it }
@@ -89,7 +115,7 @@ object VoskModelManager {
                 loadedModel = loaded
                 loadedModelId = model.id
                 loaded
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 null
             }
         }
@@ -101,6 +127,7 @@ object VoskModelManager {
         force: Boolean = false,
         onProgress: (Float) -> Unit = {}
     ): Boolean = withContext(Dispatchers.IO) {
+        if (!canUse(context, model)) return@withContext false
         synchronized(lock) {
             try {
                 val dir = modelDir(context, model)
@@ -114,7 +141,7 @@ object VoskModelManager {
                 }
                 if (!isReady(context, model)) prepareFiles(context, model, dir, onProgress)
                 true
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 false
             }
         }

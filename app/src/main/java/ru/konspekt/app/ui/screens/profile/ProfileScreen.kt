@@ -69,6 +69,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -664,12 +665,13 @@ fun ProfileScreen(
         ModelPickerDialog(
             selected = selectedModel,
             onSelect = { model ->
-                VoskModelManager.select(context, model)
-                selectedModel = model
-                modelReady = VoskModelManager.isReady(context, model)
-                modelProgress = 0f
-                modelError = null
-                showModelPicker = false
+                if (VoskModelManager.select(context, model)) {
+                    selectedModel = model
+                    modelReady = VoskModelManager.isReady(context, model)
+                    modelProgress = 0f
+                    modelError = null
+                    showModelPicker = false
+                }
             },
             onDismiss = { showModelPicker = false }
         )
@@ -692,12 +694,16 @@ private fun ModelPickerDialog(
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 VoskModel.entries.forEach { model ->
                     val ready = VoskModelManager.isReady(context, model)
+                    val supported = VoskModelManager.canUse(context, model)
                     val active = selected == model
                     Surface(
                         onClick = {
-                            haptics.tap()
-                            onSelect(model)
+                            if (supported) {
+                                haptics.tap()
+                                onSelect(model)
+                            }
                         },
+                        modifier = Modifier.alpha(if (supported) 1f else 0.55f),
                         shape = RoundedCornerShape(18.dp),
                         color = if (active) {
                             MaterialTheme.colorScheme.secondaryContainer
@@ -756,20 +762,28 @@ private fun ModelPickerDialog(
                                 )
                                 Spacer(Modifier.height(3.dp))
                                 Text(
-                                    text = if (ready) {
+                                    text = if (!supported) {
+                                        "Недоступна · нужно 16+ ГБ RAM"
+                                    } else if (ready) {
                                         "Скачана · ${model.sizeLabel}"
                                     } else {
                                         "Не скачана · ${model.sizeLabel}"
                                     },
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = if (ready) {
+                                    color = if (!supported) {
+                                        MaterialTheme.colorScheme.error
+                                    } else if (ready) {
                                         MaterialTheme.colorScheme.primary
                                     } else {
                                         MaterialTheme.colorScheme.onSurfaceVariant
                                     }
                                 )
                             }
-                            RadioButton(selected = active, onClick = null)
+                            RadioButton(
+                                selected = active,
+                                onClick = null,
+                                enabled = supported
+                            )
                         }
                     }
                 }

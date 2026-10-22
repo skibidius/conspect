@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#E7EBE4</color>
+    <color name="ic_launcher_background">#44584A</color>
     <color name="sage_deep">#44584A</color>
     <color name="splash_background">#F7F9F2</color>
 </resources>

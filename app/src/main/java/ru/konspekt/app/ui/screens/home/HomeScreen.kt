@@ -36,7 +36,6 @@ import androidx.compose.ui.unit.sp
 import ru.konspekt.app.data.Note
 import ru.konspekt.app.data.Subject
 import ru.konspekt.app.ui.components.EmptyState
-import ru.konspekt.app.ui.components.KonspektLogo
 import ru.konspekt.app.ui.components.NoteRow
 import ru.konspekt.app.ui.components.SectionHeader
 import ru.konspekt.app.ui.components.UserAvatar
@@ -70,11 +69,7 @@ fun HomeScreen(
     Column(modifier = modifier.fillMaxWidth()) {
         TopAppBar(
             title = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    KonspektLogo(size = 30.dp)
-                    Spacer(Modifier.width(9.dp))
-                    Text("Conspect", style = MaterialTheme.typography.titleLarge)
-                }
+                Text("Conspect", style = MaterialTheme.typography.titleLarge)
             },
             actions = {
                 IconButton(onClick = {

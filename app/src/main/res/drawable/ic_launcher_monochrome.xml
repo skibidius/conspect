@@ -4,12 +4,9 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Themed (Material You) icon: one clear silhouette with cut-out ruled lines. -->
+    <!-- Themed (Material You) icon: one clear document silhouette with cut-out lines. -->
     <path
         android:fillColor="#000000"
         android:fillType="evenOdd"
-        android:pathData="M39,34C39,29.58 42.58,26 47,26H61L72,37V73C72,77.42 68.42,81 64,81H47C42.58,81 39,77.42 39,73Z M47,45H64V48.2H47Z M47,53H59V56.2H47Z M47,61H62V64.2H47Z" />
-    <path
-        android:fillColor="#000000"
-        android:pathData="M77,20C78.25,26.25 80.25,28.25 86.5,29.5C80.25,30.75 78.25,32.75 77,39C75.75,32.75 73.75,30.75 67.5,29.5C73.75,28.25 75.75,26.25 77,20Z" />
+        android:pathData="M32,27C32,23 35,20 39,20H61L76,35V77C76,81 73,84 69,84H39C35,84 32,81 32,77Z M40,43H67V45.6H40Z M40,53H62V55.6H40Z M40,63H64V65.6H40Z" />
 </vector>
