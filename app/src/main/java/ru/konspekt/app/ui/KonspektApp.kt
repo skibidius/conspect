@@ -47,8 +47,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
@@ -64,6 +62,7 @@ import kotlinx.coroutines.launch
 import ru.konspekt.app.BuildConfig
 import ru.konspekt.app.data.AppViewModel
 import ru.konspekt.app.ui.components.NewRecordingSheet
+import ru.konspekt.app.ui.components.rememberHaptics
 import ru.konspekt.app.ui.screens.home.HomeScreen
 import ru.konspekt.app.ui.screens.library.LibraryScreen
 import ru.konspekt.app.ui.screens.note.NoteScreen
@@ -103,10 +102,10 @@ fun KonspektApp(viewModel: AppViewModel) {
         showRecordingSheet = true
     }
 
-    val haptics = LocalHapticFeedback.current
+    val haptics = rememberHaptics()
 
     fun navigateTab(route: String) {
-        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        haptics.tap()
         navController.navigate(route) {
             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
             launchSingleTop = true
@@ -159,7 +158,7 @@ fun KonspektApp(viewModel: AppViewModel) {
             if (isRoot) {
                 ExtendedFloatingActionButton(
                     onClick = {
-                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        haptics.tap()
                         if (viewModel.subjects.isEmpty()) {
                             navController.navigate("subjects")
                         } else {

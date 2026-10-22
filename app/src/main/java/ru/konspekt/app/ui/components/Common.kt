@@ -43,6 +43,7 @@ fun SectionHeader(
     action: String? = null,
     onAction: (() -> Unit)? = null
 ) {
+    val haptics = rememberHaptics()
     Row(
         modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
@@ -54,7 +55,12 @@ fun SectionHeader(
             modifier = Modifier.weight(1f)
         )
         if (action != null && onAction != null) {
-            TextButton(onClick = onAction) {
+            TextButton(
+                onClick = {
+                    haptics.tap()
+                    onAction()
+                }
+            ) {
                 Text(action, style = MaterialTheme.typography.labelLarge)
             }
         }
@@ -143,8 +149,12 @@ fun NoteRow(
     modifier: Modifier = Modifier,
     showDate: Boolean = true
 ) {
+    val haptics = rememberHaptics()
     Surface(
-        onClick = onClick,
+        onClick = {
+            haptics.tap()
+            onClick()
+        },
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow

@@ -44,6 +44,7 @@ import ru.konspekt.app.data.Subject
 import ru.konspekt.app.ui.components.EmptyState
 import ru.konspekt.app.ui.components.NoteRow
 import ru.konspekt.app.ui.components.UserAvatar
+import ru.konspekt.app.ui.components.rememberHaptics
 import ru.konspekt.app.ui.theme.LocalKonspektDark
 import ru.konspekt.app.util.notesCountText
 
@@ -59,6 +60,7 @@ fun LibraryScreen(
 ) {
     var selectedSubject by remember { mutableStateOf<String?>(null) }
     var newestFirst by remember { mutableStateOf(true) }
+    val haptics = rememberHaptics()
 
     val filtered = notes
         .filter { selectedSubject == null || it.subjectId == selectedSubject }
@@ -71,7 +73,10 @@ fun LibraryScreen(
                 UserAvatar(
                     name = "Аня",
                     modifier = Modifier
-                        .clickable(onClick = onProfile)
+                        .clickable {
+                            haptics.tap()
+                            onProfile()
+                        }
                         .padding(end = 12.dp)
                 )
             },
@@ -164,7 +169,10 @@ fun LibraryScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.size(4.dp))
-                IconButton(onClick = { newestFirst = !newestFirst }) {
+                IconButton(onClick = {
+                    haptics.tap()
+                    newestFirst = !newestFirst
+                }) {
                     Icon(
                         imageVector = Icons.Rounded.Sort,
                         contentDescription = if (newestFirst) "Сначала новые" else "Сначала длинные",
@@ -204,9 +212,13 @@ private fun LibraryChip(
     selected: Boolean,
     onClick: () -> Unit
 ) {
+    val haptics = rememberHaptics()
     FilterChip(
         selected = selected,
-        onClick = onClick,
+        onClick = {
+            haptics.tap()
+            onClick()
+        },
         label = { Text(text) },
         leadingIcon = if (selected) {
             {

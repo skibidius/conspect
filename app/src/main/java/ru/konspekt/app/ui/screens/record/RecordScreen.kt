@@ -38,6 +38,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Cloud
@@ -61,6 +62,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -75,9 +77,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -89,8 +89,10 @@ import kotlinx.coroutines.delay
 import ru.konspekt.app.BuildConfig
 import ru.konspekt.app.data.NoteGenerationResult
 import ru.konspekt.app.data.Subject
+import ru.konspekt.app.recording.VoskModelManager
 import ru.konspekt.app.recording.VoskSpeechCapture
 import ru.konspekt.app.ui.components.KonspektLogo
+import ru.konspekt.app.ui.components.rememberHaptics
 import ru.konspekt.app.ui.theme.LocalKonspektDark
 import java.util.Locale
 
@@ -108,7 +110,6 @@ private val demoScript = listOf(
     DemoLine("Сегодня разберём производную сложной функции и правило цепочки."),
     DemoLine("Напомню, что производная описывает мгновенную скорость изменения функции."),
     DemoLine("Формально это предел отношения приращения функции к приращению аргумента."),
-    DemoLine("Кстати, в среду в 16:00 будет консультация в 402-й аудитории, приходите.", true),
     DemoLine("Теперь перейдём к сложной функции: у неё есть внешняя и внутренняя части."),
     DemoLine("Обозначим внутреннюю функцию через g, а внешнюю — через f."),
     DemoLine("Небольшое отступление про конференцию в Казани и потерянный доклад.", true),
@@ -148,6 +149,10 @@ fun RecordScreen(
     var partialText by remember { mutableStateOf("") }
     var speechError by remember { mutableStateOf<String?>(null) }
     var recognitionStatus by remember { mutableStateOf<String?>(null) }
+    var modelDownloading by remember {
+        mutableStateOf(!demoMode && !VoskModelManager.isReady(context))
+    }
+    var modelProgress by remember { mutableFloatStateOf(0f) }
     var showCloseDialog by remember { mutableStateOf(false) }
     var showNoSpeechDialog by remember { mutableStateOf(false) }
     var processingStep by remember { mutableIntStateOf(0) }
@@ -179,10 +184,18 @@ fun RecordScreen(
                 }
             },
             onAmplitude = { amplitude = it },
-            onStatus = { status -> recognitionStatus = status },
+            onStatus = { status ->
+                recognitionStatus = status
+                if (status == "Готово") modelDownloading = false
+            },
             onError = { message ->
                 speechError = message
                 partialText = ""
+                modelDownloading = false
+            },
+            onModelProgress = { progress ->
+                modelDownloading = true
+                modelProgress = progress
             }
         )
     }
@@ -195,6 +208,7 @@ fun RecordScreen(
             speechCapture.start()
         } else {
             speechError = "Нет доступа к микрофону"
+            modelDownloading = false
         }
     }
 
@@ -279,7 +293,7 @@ fun RecordScreen(
         return
     }
 
-    val haptics = LocalHapticFeedback.current
+    val haptics = rememberHaptics()
     val dark = LocalKonspektDark.current
     val isPaused = stage == RecordStage.PAUSED
     val active = stage == RecordStage.RECORDING
@@ -316,6 +330,7 @@ fun RecordScreen(
             },
             navigationIcon = {
                 IconButton(onClick = {
+                    haptics.tap()
                     if (stage == RecordStage.PROCESSING) onClose() else showCloseDialog = true
                 }) {
                     Icon(
@@ -367,6 +382,7 @@ fun RecordScreen(
             demoMode = demoMode,
             amplitude = smoothAmplitude,
             onPause = {
+                haptics.tap()
                 if (stage == RecordStage.RECORDING) {
                     stage = RecordStage.PAUSED
                     if (!demoMode) speechCapture.stop()
@@ -376,7 +392,7 @@ fun RecordScreen(
                 }
             },
             onStop = {
-                haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                haptics.confirm()
                 if (!demoMode && lines.isEmpty() && partialText.isBlank()) {
                     showNoSpeechDialog = true
                 } else {
@@ -394,6 +410,7 @@ fun RecordScreen(
                 }
             },
             onFlag = {
+                haptics.tap()
                 lines.add(
                     TranscriptLine(
                         time = formatTime(elapsed),
@@ -414,6 +431,8 @@ fun RecordScreen(
             statusText = recognitionStatus,
             active = active,
             demoMode = demoMode,
+            modelDownloading = modelDownloading,
+            modelProgress = modelProgress,
             listState = transcriptState,
             modifier = Modifier
                 .fillMaxWidth()
@@ -433,7 +452,10 @@ fun RecordScreen(
                 )
             },
             confirmButton = {
-                TextButton(onClick = { showNoSpeechDialog = false }) { Text("Продолжить") }
+                TextButton(onClick = {
+                    haptics.tap()
+                    showNoSpeechDialog = false
+                }) { Text("Продолжить") }
             }
         )
     }
@@ -446,6 +468,7 @@ fun RecordScreen(
             text = { Text("Аудио и текущий транскрипт будут удалены. Конспект не создастся.") },
             confirmButton = {
                 TextButton(onClick = {
+                    haptics.confirm()
                     showCloseDialog = false
                     speechCapture.stop()
                     onClose()
@@ -454,7 +477,10 @@ fun RecordScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showCloseDialog = false }) {
+                TextButton(onClick = {
+                    haptics.tap()
+                    showCloseDialog = false
+                }) {
                     Text("Продолжить")
                 }
             }
@@ -679,6 +705,73 @@ private fun RecordingWave(
 }
 
 @Composable
+private fun ModelDownloadCard(progress: Float, modifier: Modifier = Modifier) {
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress,
+        animationSpec = tween(250),
+        label = "model-download"
+    )
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        color = MaterialTheme.colorScheme.primaryContainer
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(13.dp))
+                        .background(MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.08f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.CloudDownload,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(21.dp)
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Загружаем модель речи",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Text(
+                        text = "Один раз · ~44 МБ",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                    )
+                }
+                Text(
+                    text = "${(progress * 100).toInt()}%",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+            Spacer(Modifier.height(16.dp))
+            LinearProgressIndicator(
+                progress = { animatedProgress },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(10.dp)
+                    .clip(CircleShape),
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.12f)
+            )
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text = "После загрузки распознавание работает офлайн. Аудио не сохраняется.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f)
+            )
+        }
+    }
+}
+
+@Composable
 private fun TranscriptPanel(
     lines: List<TranscriptLine>,
     partialText: String,
@@ -686,6 +779,8 @@ private fun TranscriptPanel(
     statusText: String?,
     active: Boolean,
     demoMode: Boolean,
+    modelDownloading: Boolean,
+    modelProgress: Float,
     listState: androidx.compose.foundation.lazy.LazyListState,
     modifier: Modifier = Modifier
 ) {
@@ -750,7 +845,15 @@ private fun TranscriptPanel(
                     .fillMaxWidth()
                     .weight(1f)
             ) {
-                LazyColumn(
+                if (modelDownloading) {
+                    ModelDownloadCard(
+                        progress = modelProgress,
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(horizontal = 18.dp, vertical = 8.dp)
+                    )
+                } else {
+                    LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(
@@ -828,6 +931,7 @@ private fun TranscriptPanel(
                             )
                         )
                 )
+                }
             }
 
             Row(

@@ -23,7 +23,8 @@ class VoskSpeechCapture(
     private val onFinal: (String) -> Unit,
     private val onAmplitude: (Float) -> Unit,
     private val onStatus: (String) -> Unit,
-    private val onError: (String) -> Unit
+    private val onError: (String) -> Unit,
+    private val onModelProgress: (Float) -> Unit = {}
 ) {
     private val main = Handler(Looper.getMainLooper())
     private var recognizer: Recognizer? = null
@@ -38,10 +39,18 @@ class VoskSpeechCapture(
         running = true
         thread = Thread {
             try {
-                onStatus("Загрузка офлайн-модели…")
+                post { onStatus("Загрузка офлайн-модели…") }
+                var lastPercent = -1
                 val model = runBlocking {
                     VoskModelManager.ensure(context) { progress ->
-                        onStatus("Загрузка модели… ${(progress * 100).toInt()}%")
+                        val percent = (progress * 100).toInt()
+                        if (percent != lastPercent) {
+                            lastPercent = percent
+                            post {
+                                onModelProgress(progress)
+                                onStatus("Загрузка модели… $percent%")
+                            }
+                        }
                     }
                 }
                 if (model == null) {

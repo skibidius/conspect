@@ -56,6 +56,7 @@ import ru.konspekt.app.data.SubjectIcon
 import ru.konspekt.app.data.SubjectTone
 import ru.konspekt.app.ui.components.SubjectIconBadge
 import ru.konspekt.app.ui.components.UserAvatar
+import ru.konspekt.app.ui.components.rememberHaptics
 import ru.konspekt.app.ui.theme.LocalKonspektDark
 import ru.konspekt.app.util.notesCountText
 import ru.konspekt.app.util.subjectsCountText
@@ -73,12 +74,16 @@ fun SubjectsScreen(
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
     val totalNotes = subjects.sumOf { notesCount(it.id) }
+    val haptics = rememberHaptics()
 
     Column(modifier = modifier.fillMaxWidth()) {
         TopAppBar(
             title = { Text("Предметы") },
             actions = {
-                IconButton(onClick = { showAddDialog = true }) {
+                IconButton(onClick = {
+                    haptics.tap()
+                    showAddDialog = true
+                }) {
                     Icon(
                         imageVector = Icons.Rounded.Add,
                         contentDescription = "Добавить предмет",
@@ -88,7 +93,10 @@ fun SubjectsScreen(
                 UserAvatar(
                     name = "Аня",
                     modifier = Modifier
-                        .clickable(onClick = onProfile)
+                        .clickable {
+                            haptics.tap()
+                            onProfile()
+                        }
                         .padding(end = 12.dp)
                 )
             },
@@ -233,8 +241,12 @@ private fun SubjectGridCard(
     val dark = LocalKonspektDark.current
     val container = subject.tone.container(dark)
     val onContainer = subject.tone.onContainer(dark)
+    val haptics = rememberHaptics()
     Surface(
-        onClick = onClick,
+        onClick = {
+            haptics.tap()
+            onClick()
+        },
         modifier = Modifier
             .fillMaxWidth()
             .height(206.dp),
@@ -304,8 +316,12 @@ private fun SubjectGridCard(
 
 @Composable
 private fun AddSubjectCard(onClick: () -> Unit) {
+    val haptics = rememberHaptics()
     Surface(
-        onClick = onClick,
+        onClick = {
+            haptics.tap()
+            onClick()
+        },
         modifier = Modifier
             .fillMaxWidth()
             .height(206.dp),
@@ -361,6 +377,7 @@ private fun AddSubjectDialog(
     var name by remember { mutableStateOf("") }
     var tone by remember { mutableStateOf(SubjectTone.SAGE) }
     var icon by remember { mutableStateOf(SubjectIcon.FUNCTIONS) }
+    val haptics = rememberHaptics()
     val icons = listOf(
         SubjectIcon.FUNCTIONS,
         SubjectIcon.SCIENCE,
@@ -405,7 +422,10 @@ private fun AddSubjectDialog(
                                         Modifier.border(2.dp, item.accent(dark), CircleShape)
                                     } else Modifier
                                 )
-                                .clickable { tone = item },
+                                .clickable {
+                                    haptics.tap()
+                                    tone = item
+                                },
                             contentAlignment = Alignment.Center
                         ) {
                             if (tone == item) {
@@ -437,7 +457,10 @@ private fun AddSubjectDialog(
                                     if (selected) MaterialTheme.colorScheme.secondaryContainer
                                     else MaterialTheme.colorScheme.surfaceContainerHigh
                                 )
-                                .clickable { icon = item },
+                                .clickable {
+                                    haptics.tap()
+                                    icon = item
+                                },
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
@@ -454,14 +477,20 @@ private fun AddSubjectDialog(
         },
         confirmButton = {
             Button(
-                onClick = { onConfirm(name, tone, icon) },
+                onClick = {
+                    haptics.confirm()
+                    onConfirm(name, tone, icon)
+                },
                 enabled = name.isNotBlank()
             ) {
                 Text("Создать")
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Отмена") }
+            TextButton(onClick = {
+                haptics.tap()
+                onDismiss()
+            }) { Text("Отмена") }
         }
     )
 }

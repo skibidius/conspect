@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Conspect — конспекты лекций</title>
+  <meta name="description" content="Conspect — офлайн-конспекты лекций для Android: распознавание речи, LaTeX-формулы и PDF.">
+  <link rel="icon" href="icon.png" type="image/png">
+  <style>
+    @font-face { font-family: "Google Sans"; src: url("fonts/GoogleSans-Regular.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+    @font-face { font-family: "Google Sans"; src: url("fonts/GoogleSans-Medium.ttf") format("truetype"); font-weight: 500; font-display: swap; }
+    @font-face { font-family: "Google Sans"; src: url("fonts/GoogleSans-Bold.ttf") format("truetype"); font-weight: 700; font-display: swap; }
+    :root {
+      color-scheme: light;
+      --bg: #f8faf4;
+      --surface: #ffffff;
+      --surface-2: #eef2ea;
+      --text: #1b211c;
+      --muted: #5d685e;
+      --line: #dfe6dd;
+      --primary: #3f6348;
+      --on-primary: #ffffff;
+      --primary-soft: #d8edda;
+      --accent: #4b5c91;
+      --shadow: 0 18px 60px rgba(31, 48, 35, .12);
+      --radius: 28px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        color-scheme: dark;
+        --bg: #101510;
+        --surface: #1a211b;
+        --surface-2: #222a23;
+        --text: #e3e9e1;
+        --muted: #b5c1b6;
+        --line: #39433a;
+        --primary: #a3d3ac;
+        --on-primary: #0b2a14;
+        --primary-soft: #26442e;
+        --accent: #b9c6f4;
+        --shadow: 0 18px 60px rgba(0, 0, 0, .45);
+      }
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font-family: "Google Sans", Roboto, "Helvetica Neue", Arial, sans-serif;
+      -webkit-font-smoothing: antialiased; line-height: 1.55;
+    }
+    a { color: inherit; }
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+    header {
+      position: sticky; top: 0; z-index: 20; backdrop-filter: blur(18px);
+      background: color-mix(in srgb, var(--bg) 84%, transparent);
+      border-bottom: 1px solid color-mix(in srgb, var(--line) 65%, transparent);
+    }
+    .bar { display: flex; align-items: center; gap: 14px; height: 72px; }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 500; font-size: 20px; letter-spacing: -.3px; text-decoration: none; }
+    .brand img { width: 34px; height: 34px; border-radius: 10px; }
+    nav { display: flex; gap: 26px; margin-left: 28px; }
+    nav a { color: var(--muted); text-decoration: none; font-size: 14px; }
+    nav a:hover { color: var(--text); }
+    .bar .actions { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      min-height: 46px; padding: 0 22px; border-radius: 999px; text-decoration: none;
+      font-size: 14px; font-weight: 500; border: 1px solid transparent; transition: .18s ease;
+    }
+    .btn-primary { background: var(--primary); color: var(--on-primary); }
+    .btn-primary:hover { transform: translateY(-1px); filter: brightness(1.06); }
+    .btn-ghost { border-color: var(--line); color: var(--text); background: var(--surface); }
+    .btn-ghost:hover { background: var(--surface-2); }
+    .btn-small { min-height: 40px; padding: 0 16px; }
+    .hero { display: grid; grid-template-columns: 1.05fr .95fr; gap: 56px; align-items: center; padding: 76px 0 64px; }
+    .eyebrow { display: inline-flex; gap: 8px; align-items: center; padding: 7px 12px; border-radius: 999px; background: var(--primary-soft); color: var(--primary); font-size: 12px; font-weight: 500; letter-spacing: .2px; }
+    .dot { width: 7px; height: 7px; border-radius: 999px; background: currentColor; }
+    h1 { font-size: clamp(40px, 5vw, 66px); line-height: 1.06; letter-spacing: -1.8px; margin: 20px 0 18px; font-weight: 500; }
+    .lead { font-size: 19px; color: var(--muted); max-width: 540px; margin: 0 0 28px; }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+    .fine { color: var(--muted); font-size: 13px; margin-top: 16px; }
+    .phone-wrap { display: flex; justify-content: center; position: relative; }
+    .phone-wrap::before { content: ""; position: absolute; inset: 8% 6%; background: radial-gradient(ellipse at center, color-mix(in srgb, var(--primary-soft) 80%, transparent), transparent 70%); filter: blur(24px); z-index: 0; }
+    .phone { position: relative; z-index: 1; width: min(330px, 82vw); border-radius: 40px; box-shadow: var(--shadow); border: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
+    section { padding: 68px 0; }
+    .section-head { max-width: 680px; margin-bottom: 32px; }
+    h2 { font-size: clamp(30px, 3.3vw, 42px); line-height: 1.16; letter-spacing: -1px; margin: 0 0 10px; font-weight: 500; }
+    .sub { color: var(--muted); font-size: 17px; margin: 0; }
+    .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 26px; }
+    .icon { width: 46px; height: 46px; border-radius: 15px; background: var(--primary-soft); color: var(--primary); display: grid; place-items: center; margin-bottom: 18px; }
+    .icon svg { width: 23px; height: 23px; }
+    .card h3 { margin: 0 0 6px; font-size: 19px; font-weight: 500; letter-spacing: -.2px; }
+    .card p { margin: 0; color: var(--muted); font-size: 14.5px; }
+    .gallery { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .shot { display: block; border-radius: 22px; overflow: hidden; border: 1px solid var(--line); background: var(--surface-2); }
+    .shot img { display: block; width: 100%; height: auto; }
+    .privacy { display: flex; gap: 18px; align-items: flex-start; background: var(--primary-soft); border-radius: var(--radius); padding: 28px; }
+    .privacy .icon { background: color-mix(in srgb, var(--primary) 14%, transparent); margin: 0; flex: 0 0 auto; }
+    .privacy p { color: color-mix(in srgb, var(--text) 76%, transparent); margin: 4px 0 0; font-size: 14.5px; }
+    footer { border-top: 1px solid var(--line); padding: 30px 0 44px; color: var(--muted); font-size: 13px; }
+    .footer-row { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; justify-content: space-between; }
+    .footer-links { display: flex; flex-wrap: wrap; gap: 18px; }
+    .footer-links a { text-decoration: none; color: var(--muted); }
+    .footer-links a:hover { color: var(--text); }
+    @media (max-width: 900px) {
+      nav { display: none; }
+      .hero { grid-template-columns: 1fr; gap: 40px; padding-top: 52px; }
+      .phone-wrap { order: -1; }
+      .phone { width: min(280px, 76vw); }
+      .features { grid-template-columns: 1fr; }
+      .gallery { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 560px) {
+      .wrap { padding: 0 18px; }
+      .bar { height: 64px; }
+      .bar .btn { display: none; }
+      .hero { padding: 40px 0 40px; }
+      .lead { font-size: 17px; }
+      section { padding: 48px 0; }
+      .privacy { padding: 22px; }
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div class="wrap bar">
+    <a class="brand" href="./"><img src="icon.png" alt="">Conspect</a>
+    <nav>
+      <a href="#features">Возможности</a>
+      <a href="#screens">Скриншоты</a>
+      <a href="#privacy">Приватность</a>
+    </nav>
+    <div class="actions">
+      <a class="btn btn-ghost btn-small" href="https://github.com/skibidius/conspect" target="_blank" rel="noopener">GitHub</a>
+      <a class="btn btn-primary btn-small" href="https://github.com/skibidius/conspect/releases/latest">Скачать APK</a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <section class="hero" style="padding-bottom:64px">
+      <div>
+        <span class="eyebrow"><span class="dot"></span> Android · офлайн</span>
+        <h1>Конспекты лекций,<br>которые делает Conspect</h1>
+        <p class="lead">Включите запись перед парой. Conspect распознаёт речь без интернета, убирает отступления и собирает аккуратный конспект с формулами LaTeX и PDF.</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="https://github.com/skibidius/conspect/releases/latest">Скачать для Android</a>
+          <a class="btn btn-ghost" href="https://github.com/skibidius/conspect" target="_blank" rel="noopener">Открыть GitHub</a>
+        </div>
+        <p class="fine">Бесплатно · без рекламы · Android 8+ · модель распознавания скачивается отдельно</p>
+      </div>
+      <div class="phone-wrap">
+        <img class="phone" src="screenshots/home.png" alt="Главный экран Conspect">
+      </div>
+    </section>
+
+    <section id="features">
+      <div class="section-head">
+        <h2>Слушает. Понимает. Оформляет.</h2>
+        <p class="sub">Три шага от лекции до готового конспекта — без облака и аккаунтов.</p>
+      </div>
+      <div class="features">
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"/></svg></div>
+          <h3>Слушает офлайн</h3>
+          <p>Русская модель Vosk работает на устройстве. Аудио не записывается и не отправляется.</p>
+        </article>
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg></div>
+          <h3>Формулы и PDF</h3>
+          <p>Определения, теоремы и LaTeX-формулы в готовом конспекте. Экспорт в A4 и поиск.</p>
+        </article>
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="10" width="16" height="10" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div>
+          <h3>Локально по умолчанию</h3>
+          <p>Конспекты остаются на телефоне. DeepSeek Flash — только по желанию и со своим ключом.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="screens">
+      <div class="section-head">
+        <h2>Выглядит как Android</h2>
+        <p class="sub">Material You, Google Sans, тёмная тема и аккуратные системные отступы.</p>
+      </div>
+      <div class="gallery">
+        <a class="shot" href="rustore/16x9-record.png"><img src="rustore/16x9-record.png" alt="Запись лекции"></a>
+        <a class="shot" href="rustore/16x9-note.png"><img src="rustore/16x9-note.png" alt="Конспект с LaTeX"></a>
+      </div>
+    </section>
+
+    <section id="privacy">
+      <div class="privacy">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l7 3v6c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6z"/><path d="M9.5 12l1.8 1.8 3.6-3.8"/></svg></div>
+        <div>
+          <h3 style="margin:0 0 2px;font-size:19px;font-weight:500">Приватность без мелкого шрифта</h3>
+          <p>Аудио обрабатывается на устройстве и не сохраняется. Текст отправляется в DeepSeek Flash только если вы сами включили этот режим. API-ключ хранится в зашифрованном виде.</p>
+          <p style="margin-top:10px"><a href="privacy.html" style="color:var(--primary);font-weight:500">Политика конфиденциальности →</a></p>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap footer-row">
+    <div class="brand" style="font-size:16px"><img src="icon.png" alt="" style="width:26px;height:26px;border-radius:8px">Conspect</div>
+    <div class="footer-links">
+      <a href="https://github.com/skibidius/conspect/releases/latest">Скачать</a>
+      <a href="privacy.html">Конфиденциальность</a>
+      <a href="https://github.com/skibidius/conspect" target="_blank" rel="noopener">GitHub</a>
+      <span>© 2026 Conspect</span>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

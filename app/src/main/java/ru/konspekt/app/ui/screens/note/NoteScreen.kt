@@ -78,6 +78,7 @@ import ru.konspekt.app.pdf.PdfExporter
 import ru.konspekt.app.ui.components.AiPill
 import ru.konspekt.app.ui.components.DividerLine
 import ru.konspekt.app.ui.components.SubjectPill
+import ru.konspekt.app.ui.components.rememberHaptics
 import ru.konspekt.app.ui.theme.LocalKonspektDark
 import ru.konspekt.app.util.fragmentsHiddenText
 import kotlinx.coroutines.launch
@@ -98,12 +99,14 @@ fun NoteScreen(
     val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
     val dark = LocalKonspektDark.current
+    val haptics = rememberHaptics()
     var menuOpen by remember { mutableStateOf(false) }
     var showLatex by remember { mutableStateOf(false) }
     var skippedExpanded by remember { mutableStateOf(false) }
     var exporting by remember { mutableStateOf(false) }
 
     fun shareNote() {
+        haptics.tap()
         val text = buildString {
             appendLine(note.title)
             appendLine(subject.name)
@@ -128,6 +131,7 @@ fun NoteScreen(
 
     fun exportPdf() {
         if (exporting) return
+        haptics.confirm()
         exporting = true
         PdfExporter.export(context, note, subject) { file, message ->
             exporting = false
@@ -143,7 +147,10 @@ fun NoteScreen(
         TopAppBar(
             title = { Text("Conspect") },
             navigationIcon = {
-                IconButton(onClick = onBack) {
+                IconButton(onClick = {
+                    haptics.tap()
+                    onBack()
+                }) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                         contentDescription = "Назад"
@@ -173,7 +180,10 @@ fun NoteScreen(
                     }
                 }
                 Box {
-                    IconButton(onClick = { menuOpen = true }) {
+                    IconButton(onClick = {
+                        haptics.tap()
+                        menuOpen = true
+                    }) {
                         Icon(
                             imageVector = Icons.Rounded.MoreVert,
                             contentDescription = "Ещё",
@@ -184,6 +194,7 @@ fun NoteScreen(
                         DropdownMenuItem(
                             text = { Text("Показать LaTeX") },
                             onClick = {
+                                haptics.tap()
                                 menuOpen = false
                                 showLatex = true
                             },
@@ -192,6 +203,7 @@ fun NoteScreen(
                         DropdownMenuItem(
                             text = { Text("Экспорт в PDF") },
                             onClick = {
+                                haptics.tap()
                                 menuOpen = false
                                 exportPdf()
                             },
@@ -200,6 +212,7 @@ fun NoteScreen(
                         DropdownMenuItem(
                             text = { Text("Скопировать текст") },
                             onClick = {
+                                haptics.tap()
                                 menuOpen = false
                                 clipboard.setText(AnnotatedString(note.summary))
                                 onMessage("Текст скопирован")
@@ -335,6 +348,7 @@ fun NoteScreen(
                     index = index + 1,
                     section = note.sections[index],
                     onCopyFormula = { formula ->
+                        haptics.tap()
                         clipboard.setText(AnnotatedString(formula))
                         onMessage("Формула скопирована")
                     }
@@ -348,7 +362,10 @@ fun NoteScreen(
                     SkippedCard(
                         note = note,
                         expanded = skippedExpanded,
-                        onToggle = { skippedExpanded = !skippedExpanded }
+                        onToggle = {
+                            haptics.tap()
+                            skippedExpanded = !skippedExpanded
+                        }
                     )
                 }
             }
@@ -384,7 +401,10 @@ fun NoteScreen(
                         }
                     }
                     OutlinedButton(
-                        onClick = { showLatex = true },
+                        onClick = {
+                            haptics.tap()
+                            showLatex = true
+                        },
                         modifier = Modifier.height(52.dp),
                         shape = RoundedCornerShape(17.dp)
                     ) {

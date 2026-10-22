@@ -55,6 +55,7 @@ import ru.konspekt.app.data.SubjectIcon
 import ru.konspekt.app.data.SubjectTone
 import ru.konspekt.app.ui.components.EmptyState
 import ru.konspekt.app.ui.components.NoteRow
+import ru.konspekt.app.ui.components.rememberHaptics
 import ru.konspekt.app.ui.theme.LocalKonspektDark
 import ru.konspekt.app.util.notesCountText
 
@@ -71,6 +72,7 @@ fun SubjectDetailScreen(
     modifier: Modifier = Modifier
 ) {
     val dark = LocalKonspektDark.current
+    val haptics = rememberHaptics()
     var showEdit by remember { mutableStateOf(false) }
     Column(
         modifier = modifier
@@ -80,7 +82,10 @@ fun SubjectDetailScreen(
         TopAppBar(
             title = { Text(subject.shortName) },
             navigationIcon = {
-                IconButton(onClick = onBack) {
+                IconButton(onClick = {
+                    haptics.tap()
+                    onBack()
+                }) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                         contentDescription = "Назад"
@@ -88,14 +93,20 @@ fun SubjectDetailScreen(
                 }
             },
             actions = {
-                IconButton(onClick = { showEdit = true }) {
+                IconButton(onClick = {
+                    haptics.tap()
+                    showEdit = true
+                }) {
                     Icon(
                         imageVector = Icons.Rounded.Edit,
                         contentDescription = "Редактировать предмет",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                IconButton(onClick = onRecord) {
+                IconButton(onClick = {
+                    haptics.tap()
+                    onRecord()
+                }) {
                     Icon(
                         imageVector = Icons.Rounded.Mic,
                         contentDescription = "Записать лекцию",
@@ -217,7 +228,10 @@ fun SubjectDetailScreen(
             item {
                 Spacer(Modifier.height(16.dp))
                 Button(
-                    onClick = onRecord,
+                    onClick = {
+                        haptics.tap()
+                        onRecord()
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(54.dp),
@@ -291,6 +305,7 @@ private fun EditSubjectDialog(
     var name by remember { mutableStateOf(subject.name) }
     var tone by remember { mutableStateOf(subject.tone) }
     var icon by remember { mutableStateOf(subject.icon) }
+    val haptics = rememberHaptics()
     val icons = listOf(
         SubjectIcon.FUNCTIONS, SubjectIcon.SCIENCE, SubjectIcon.TERMINAL,
         SubjectIcon.LANDMARK, SubjectIcon.LANGUAGE, SubjectIcon.BIOTECH
@@ -326,7 +341,10 @@ private fun EditSubjectDialog(
                                 .size(36.dp)
                                 .clip(RoundedCornerShape(18.dp))
                                 .background(item.container(dark))
-                                .clickable { tone = item },
+                                .clickable {
+                                    haptics.tap()
+                                    tone = item
+                                },
                             contentAlignment = Alignment.Center
                         ) {
                             if (tone == item) {
@@ -357,7 +375,10 @@ private fun EditSubjectDialog(
                                     if (selected) MaterialTheme.colorScheme.secondaryContainer
                                     else MaterialTheme.colorScheme.surfaceContainerHigh
                                 )
-                                .clickable { icon = item },
+                                .clickable {
+                                    haptics.tap()
+                                    icon = item
+                                },
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
@@ -374,12 +395,18 @@ private fun EditSubjectDialog(
         },
         confirmButton = {
             Button(
-                onClick = { onConfirm(name.trim(), tone, icon) },
+                onClick = {
+                    haptics.confirm()
+                    onConfirm(name.trim(), tone, icon)
+                },
                 enabled = name.isNotBlank()
             ) { Text("Сохранить") }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Отмена") }
+            TextButton(onClick = {
+                haptics.tap()
+                onDismiss()
+            }) { Text("Отмена") }
         }
     )
 }

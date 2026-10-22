@@ -40,6 +40,7 @@ import ru.konspekt.app.ui.components.KonspektLogo
 import ru.konspekt.app.ui.components.NoteRow
 import ru.konspekt.app.ui.components.SectionHeader
 import ru.konspekt.app.ui.components.UserAvatar
+import ru.konspekt.app.ui.components.rememberHaptics
 import ru.konspekt.app.ui.theme.LocalKonspektDark
 import ru.konspekt.app.util.notesCountText
 import java.text.SimpleDateFormat
@@ -63,6 +64,7 @@ fun HomeScreen(
     modifier: Modifier = Modifier
 ) {
     val dateText = rememberDateText()
+    val haptics = rememberHaptics()
 
     Column(modifier = modifier.fillMaxWidth()) {
         TopAppBar(
@@ -74,7 +76,10 @@ fun HomeScreen(
                 }
             },
             actions = {
-                IconButton(onClick = onSearch) {
+                IconButton(onClick = {
+                    haptics.tap()
+                    onSearch()
+                }) {
                     Icon(
                         imageVector = Icons.Rounded.Search,
                         contentDescription = "Поиск",
@@ -83,7 +88,10 @@ fun HomeScreen(
                 }
                 UserAvatar(
                     name = userName,
-                    modifier = Modifier.clickable(onClick = onProfile)
+                    modifier = Modifier.clickable {
+                        haptics.tap()
+                        onProfile()
+                    }
                 )
                 Spacer(Modifier.width(12.dp))
             },
@@ -207,6 +215,7 @@ private fun RecordHeroCard(
     onStart: () -> Unit,
     onAddSubjects: () -> Unit
 ) {
+    val haptics = rememberHaptics()
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
@@ -239,7 +248,10 @@ private fun RecordHeroCard(
             )
             Spacer(Modifier.height(16.dp))
             Button(
-                onClick = if (hasSubjects) onStart else onAddSubjects,
+                onClick = {
+                    haptics.tap()
+                    if (hasSubjects) onStart() else onAddSubjects()
+                },
                 shape = CircleShape
             ) {
                 Icon(
@@ -263,8 +275,12 @@ private fun SubjectMiniCard(
     val dark = LocalKonspektDark.current
     val container = subject.tone.container(dark)
     val onContainer = subject.tone.onContainer(dark)
+    val haptics = rememberHaptics()
     Surface(
-        onClick = onClick,
+        onClick = {
+            haptics.tap()
+            onClick()
+        },
         modifier = Modifier
             .width(156.dp)
             .height(140.dp),
@@ -307,8 +323,12 @@ private fun SubjectMiniCard(
 
 @Composable
 private fun AddFirstSubjectCard(onClick: () -> Unit) {
+    val haptics = rememberHaptics()
     Surface(
-        onClick = onClick,
+        onClick = {
+            haptics.tap()
+            onClick()
+        },
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow

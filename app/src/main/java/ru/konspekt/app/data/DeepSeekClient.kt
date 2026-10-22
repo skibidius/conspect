@@ -33,7 +33,7 @@ class DeepSeekClient {
         require(cleanTranscript.isNotBlank()) { "Пустой транскрипт" }
 
         val request = JSONObject().apply {
-            put("model", "deepseek-chat")
+            put("model", "deepseek-flash")
             put("temperature", 0.2)
             put("max_tokens", 4096)
             put("response_format", JSONObject().put("type", "json_object"))

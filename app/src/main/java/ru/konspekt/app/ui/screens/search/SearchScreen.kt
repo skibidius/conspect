@@ -52,6 +52,7 @@ import ru.konspekt.app.data.Note
 import ru.konspekt.app.data.Subject
 import ru.konspekt.app.ui.components.NoteRow
 import ru.konspekt.app.ui.components.SectionHeader
+import ru.konspekt.app.ui.components.rememberHaptics
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.LaunchedEffect
 
@@ -67,6 +68,7 @@ fun SearchScreen(
     var query by remember { mutableStateOf("") }
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
+    val haptics = rememberHaptics()
     val normalized = query.trim().lowercase()
 
     val results = remember(normalized, notes, subjects) {
@@ -134,7 +136,10 @@ fun SearchScreen(
                 },
                 trailingIcon = {
                     if (query.isNotEmpty()) {
-                        IconButton(onClick = { query = "" }) {
+                        IconButton(onClick = {
+                            haptics.tap()
+                            query = ""
+                        }) {
                             Icon(Icons.Rounded.Close, contentDescription = "Очистить")
                         }
                     }
@@ -169,7 +174,10 @@ fun SearchScreen(
                 ) {
                     suggestions.forEach { suggestion ->
                         AssistChip(
-                            onClick = { query = suggestion },
+                            onClick = {
+                                haptics.tap()
+                                query = suggestion
+                            },
                             label = { Text(suggestion) },
                             leadingIcon = {
                                 Icon(
@@ -196,7 +204,10 @@ fun SearchScreen(
 
             items(subjects, key = { it.id }) { subject ->
                 Surface(
-                    onClick = { onOpenSubject(subject.id) },
+                    onClick = {
+                        haptics.tap()
+                        onOpenSubject(subject.id)
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 8.dp),

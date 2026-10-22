@@ -69,6 +69,7 @@ fun NewRecordingSheet(
     val dark = LocalKonspektDark.current
     val context = LocalContext.current
     val voskReady = remember { VoskModelManager.isReady(context) }
+    val haptics = rememberHaptics()
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -124,7 +125,10 @@ fun NewRecordingSheet(
                 items(subjects, key = { it.id }) { subject ->
                     val selected = subject.id == selectedSubjectId
                     Surface(
-                        onClick = { selectedSubjectId = subject.id },
+                        onClick = {
+                            haptics.tap()
+                            selectedSubjectId = subject.id
+                        },
                         modifier = Modifier
                             .width(112.dp)
                             .height(92.dp),
@@ -189,7 +193,13 @@ fun NewRecordingSheet(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Switch(checked = filterTangents, onCheckedChange = onFilterChange)
+                Switch(
+                    checked = filterTangents,
+                    onCheckedChange = {
+                        haptics.tap()
+                        onFilterChange(it)
+                    }
+                )
             }
 
             Spacer(Modifier.height(12.dp))
@@ -217,6 +227,7 @@ fun NewRecordingSheet(
             Button(
                 onClick = {
                     if (selectedSubjectId.isNotBlank()) {
+                        haptics.confirm()
                         onStart(selectedSubjectId, topic.trim())
                     }
                 },

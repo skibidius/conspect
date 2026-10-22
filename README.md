@@ -4,7 +4,7 @@
 
 Нативное Android-приложение для конспектов. Записываете лекцию — Conspect распознаёт речь, убирает отступления и собирает конспект с формулами LaTeX и PDF.
 
-**[Скачать APK](https://github.com/skibidius/conspect/releases/latest)**
+**[Скачать APK](https://github.com/skibidius/conspect/releases/latest)** · **[Сайт](https://skibidius.github.io/conspect/)**
 
 <p align="center">
   <img src="docs/screenshots/home.png" width="31%" alt="Главная">

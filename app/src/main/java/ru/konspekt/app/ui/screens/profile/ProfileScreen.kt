@@ -1,6 +1,7 @@
 package ru.konspekt.app.ui.screens.profile
 
 import android.os.Build
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,11 +23,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.FilterAlt
 import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.SmartToy
@@ -36,8 +39,10 @@ import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -59,9 +64,8 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -80,6 +84,7 @@ import ru.konspekt.app.data.Palette
 import ru.konspekt.app.data.ThemeMode
 import ru.konspekt.app.data.UserSettings
 import ru.konspekt.app.ui.components.DividerLine
+import ru.konspekt.app.ui.components.rememberHaptics
 import ru.konspekt.app.ui.theme.LocalKonspektDark
 import ru.konspekt.app.ui.theme.konspektColorScheme
 
@@ -105,6 +110,8 @@ fun ProfileScreen(
     var modelDownloading by remember { mutableStateOf(false) }
     var modelProgress by remember { mutableFloatStateOf(0f) }
     var modelError by remember { mutableStateOf<String?>(null) }
+    val haptics = rememberHaptics()
+    val uriHandler = LocalUriHandler.current
     val animatedModelProgress by animateFloatAsState(
         targetValue = modelProgress,
         animationSpec = tween(300),
@@ -119,7 +126,10 @@ fun ProfileScreen(
         TopAppBar(
             title = { Text("Настройки") },
             navigationIcon = {
-                IconButton(onClick = onBack) {
+                IconButton(onClick = {
+                    haptics.tap()
+                    onBack()
+                }) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                         contentDescription = "Назад"
@@ -209,7 +219,7 @@ fun ProfileScreen(
                 SettingHeader(
                     icon = Icons.Rounded.SmartToy,
                     title = "Обработка конспекта",
-                    subtitle = "Где собирать заметки из транскрипта"
+                    subtitle = "Локально или DeepSeek Flash"
                 )
                 Spacer(Modifier.height(12.dp))
                 AiModeSelector(
@@ -260,7 +270,10 @@ fun ProfileScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-                            TextButton(onClick = onClearDeepSeekKey) {
+                            TextButton(onClick = {
+                                haptics.tap()
+                                onClearDeepSeekKey()
+                            }) {
                                 Text("Удалить")
                             }
                         }
@@ -279,7 +292,10 @@ fun ProfileScreen(
                                 PasswordVisualTransformation()
                             },
                             trailingIcon = {
-                                IconButton(onClick = { showApiKey = !showApiKey }) {
+                                IconButton(onClick = {
+                                    haptics.tap()
+                                    showApiKey = !showApiKey
+                                }) {
                                     Icon(
                                         imageVector = if (showApiKey) {
                                             Icons.Rounded.VisibilityOff
@@ -294,6 +310,7 @@ fun ProfileScreen(
                         Spacer(Modifier.height(8.dp))
                         Button(
                             onClick = {
+                                haptics.confirm()
                                 onSaveDeepSeekKey(apiKeyInput)
                                 apiKeyInput = ""
                             },
@@ -302,9 +319,24 @@ fun ProfileScreen(
                             Text("Сохранить ключ")
                         }
                     }
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(2.dp))
+                    TextButton(
+                        onClick = {
+                            haptics.tap()
+                            uriHandler.openUri("https://platform.deepseek.com/api_keys")
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.OpenInNew,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.size(6.dp))
+                        Text("Получить API-ключ")
+                    }
+                    Spacer(Modifier.height(2.dp))
                     Text(
-                        text = "В этом режиме текст лекции отправляется в DeepSeek. Аудио не отправляется.",
+                        text = "Модель: deepseek-flash. В этом режиме текст лекции отправляется в DeepSeek. Аудио не отправляется.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -331,16 +363,47 @@ fun ProfileScreen(
             SectionLabel("Модели")
             Spacer(Modifier.height(10.dp))
             SettingsCard {
+                val statusColor = when {
+                    modelDownloading -> MaterialTheme.colorScheme.secondaryContainer
+                    modelReady -> MaterialTheme.colorScheme.primaryContainer
+                    else -> MaterialTheme.colorScheme.surfaceContainerHigh
+                }
+                val statusContent = when {
+                    modelDownloading -> MaterialTheme.colorScheme.onSecondaryContainer
+                    modelReady -> MaterialTheme.colorScheme.onPrimaryContainer
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.Top
                 ) {
+                    Box(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(
+                                if (modelReady) MaterialTheme.colorScheme.primaryContainer
+                                else MaterialTheme.colorScheme.surfaceContainerHigh
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (modelReady) Icons.Rounded.CheckCircle
+                            else Icons.Rounded.CloudDownload,
+                            contentDescription = null,
+                            tint = if (modelReady) MaterialTheme.colorScheme.onPrimaryContainer
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(21.dp)
+                        )
+                    }
+                    Spacer(Modifier.size(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Распознавание речи",
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.onSurface
                         )
+                        Spacer(Modifier.height(2.dp))
                         Text(
                             text = if (modelReady) {
                                 "Vosk · русский · ${VoskModelManager.sizeBytes(context) / (1024 * 1024)} МБ"
@@ -351,20 +414,43 @@ fun ProfileScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    Text(
-                        text = when {
-                            modelDownloading -> "Загрузка"
-                            modelReady -> "Скачана"
-                            else -> "Не скачана"
-                        },
-                        style = MaterialTheme.typography.labelLarge,
-                        color = if (modelReady) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Spacer(Modifier.size(10.dp))
+                    Surface(
+                        shape = CircleShape,
+                        color = statusColor
+                    ) {
+                        Text(
+                            text = when {
+                                modelDownloading -> "Загрузка"
+                                modelReady -> "Скачана"
+                                else -> "Не скачана"
+                            },
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = statusContent
+                        )
+                    }
                 }
 
                 if (modelDownloading) {
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(16.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Скачивание модели",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.weight(1f))
+                        Text(
+                            text = "${(modelProgress * 100).toInt()}%",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
                     LinearProgressIndicator(
                         progress = { animatedModelProgress },
                         modifier = Modifier
@@ -374,16 +460,10 @@ fun ProfileScreen(
                         color = MaterialTheme.colorScheme.primary,
                         trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
                     )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = "Скачивание модели… ${(modelProgress * 100).toInt()}%",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                 }
 
                 if (modelError != null) {
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(10.dp))
                     Text(
                         text = modelError.orEmpty(),
                         style = MaterialTheme.typography.bodySmall,
@@ -392,37 +472,61 @@ fun ProfileScreen(
                 }
 
                 if (!modelDownloading) {
-                    Spacer(Modifier.height(10.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Spacer(Modifier.height(16.dp))
                     if (modelReady) {
-                        TextButton(
-                            onClick = {
-                                modelDownloading = true
-                                modelProgress = 0f
-                                modelError = null
-                                scope.launch {
-                                    val ok = VoskModelManager.downloadModel(context, force = true) { p ->
-                                        modelProgress = p
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    haptics.tap()
+                                    modelDownloading = true
+                                    modelProgress = 0f
+                                    modelError = null
+                                    scope.launch {
+                                        val ok = VoskModelManager.downloadModel(context, force = true) { p ->
+                                            modelProgress = p
+                                        }
+                                        modelDownloading = false
+                                        modelReady = VoskModelManager.isReady(context)
+                                        if (!ok) modelError = "Не удалось обновить модель"
                                     }
-                                    modelDownloading = false
-                                    modelReady = VoskModelManager.isReady(context)
-                                    if (!ok) modelError = "Не удалось обновить модель"
-                                }
-                            },
-                            enabled = !modelDownloading
-                        ) { Text("Обновить") }
-                        TextButton(
-                            onClick = {
-                                VoskModelManager.delete(context)
-                                modelReady = false
-                                modelProgress = 0f
-                                modelError = null
-                            },
-                            enabled = !modelDownloading
-                        ) { Text("Удалить") }
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(46.dp),
+                                shape = RoundedCornerShape(14.dp)
+                            ) {
+                                Text("Обновить")
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    haptics.tap()
+                                    VoskModelManager.delete(context)
+                                    modelReady = false
+                                    modelProgress = 0f
+                                    modelError = null
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(46.dp),
+                                shape = RoundedCornerShape(14.dp),
+                                border = BorderStroke(
+                                    1.dp,
+                                    MaterialTheme.colorScheme.error.copy(alpha = 0.45f)
+                                ),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.error
+                                )
+                            ) {
+                                Text("Удалить")
+                            }
+                        }
                     } else {
                         Button(
                             onClick = {
+                                haptics.confirm()
                                 modelDownloading = true
                                 modelProgress = 0f
                                 modelError = null
@@ -435,7 +539,10 @@ fun ProfileScreen(
                                     if (!ok) modelError = "Не удалось скачать модель"
                                 }
                             },
-                            enabled = !modelDownloading
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                            shape = RoundedCornerShape(14.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.CloudDownload,
@@ -443,9 +550,8 @@ fun ProfileScreen(
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(Modifier.size(8.dp))
-                            Text("Скачать модель")
+                            Text("Скачать модель · 44 МБ")
                         }
-                    }
                     }
                 }
             }
@@ -605,11 +711,15 @@ private fun SettingHeader(icon: ImageVector, title: String, subtitle: String) {
 @Composable
 private fun AiModeSelector(selected: AiMode, onSelect: (AiMode) -> Unit) {
     val options = listOf(AiMode.LOCAL to "На устройстве", AiMode.DEEPSEEK to "DeepSeek")
+    val haptics = rememberHaptics()
     SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
         options.forEachIndexed { index, (mode, label) ->
             SegmentedButton(
                 selected = selected == mode,
-                onClick = { onSelect(mode) },
+                onClick = {
+                    haptics.tap()
+                    onSelect(mode)
+                },
                 shape = SegmentedButtonDefaults.itemShape(index, options.size)
             ) {
                 Text(label)
@@ -625,11 +735,15 @@ private fun ThemeModeSelector(selected: ThemeMode, onSelect: (ThemeMode) -> Unit
         ThemeMode.LIGHT to "Светлая",
         ThemeMode.DARK to "Тёмная"
     )
+    val haptics = rememberHaptics()
     SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
         options.forEachIndexed { index, (mode, label) ->
             SegmentedButton(
                 selected = selected == mode,
-                onClick = { onSelect(mode) },
+                onClick = {
+                    haptics.tap()
+                    onSelect(mode)
+                },
                 shape = SegmentedButtonDefaults.itemShape(index, options.size)
             ) {
                 Text(label, style = MaterialTheme.typography.labelMedium)
@@ -641,6 +755,7 @@ private fun ThemeModeSelector(selected: ThemeMode, onSelect: (ThemeMode) -> Unit
 @Composable
 private fun PaletteSelector(selected: Palette, onSelect: (Palette) -> Unit) {
     val dark = LocalKonspektDark.current
+    val haptics = rememberHaptics()
     val palettes = listOf(
         Palette.SAGE to "Лес",
         Palette.SKY to "Небо",
@@ -658,7 +773,10 @@ private fun PaletteSelector(selected: Palette, onSelect: (Palette) -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .clip(RoundedCornerShape(14.dp))
-                    .clickable { onSelect(palette) }
+                    .clickable {
+                        haptics.tap()
+                        onSelect(palette)
+                    }
                     .padding(horizontal = 6.dp, vertical = 4.dp)
             ) {
                 Box(
@@ -696,7 +814,7 @@ private fun SwitchRow(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
-    val haptics = LocalHapticFeedback.current
+    val haptics = rememberHaptics()
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
@@ -731,7 +849,7 @@ private fun SwitchRow(
         Switch(
             checked = checked,
             onCheckedChange = {
-                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                haptics.tap()
                 onCheckedChange(it)
             }
         )
