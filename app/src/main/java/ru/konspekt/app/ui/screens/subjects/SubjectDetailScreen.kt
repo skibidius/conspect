@@ -21,7 +21,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Edit
-import androidx.compose.material.icons.rounded.Apartment
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Schedule
@@ -167,19 +166,6 @@ fun SubjectDetailScreen(
                                 Spacer(Modifier.size(5.dp))
                                 Text(
                                     text = subject.teacher,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = subject.tone.onContainer(dark).copy(alpha = 0.72f)
-                                )
-                                Spacer(Modifier.size(14.dp))
-                                Icon(
-                                    imageVector = Icons.Rounded.Apartment,
-                                    contentDescription = null,
-                                    tint = subject.tone.onContainer(dark).copy(alpha = 0.65f),
-                                    modifier = Modifier.size(15.dp)
-                                )
-                                Spacer(Modifier.size(5.dp))
-                                Text(
-                                    text = "ауд. ${subject.room}",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = subject.tone.onContainer(dark).copy(alpha = 0.72f)
                                 )

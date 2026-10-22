@@ -156,7 +156,9 @@ fun RecordScreen(
     var showCloseDialog by remember { mutableStateOf(false) }
     var showNoSpeechDialog by remember { mutableStateOf(false) }
     var processingStep by remember { mutableIntStateOf(0) }
+    var processingError by remember { mutableStateOf<String?>(null) }
     var amplitude by remember { mutableStateOf(0f) }
+    val haptics = rememberHaptics()
     var permissionGranted by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
@@ -260,7 +262,7 @@ fun RecordScreen(
 
     LaunchedEffect(stage) {
         if (stage == RecordStage.PROCESSING) {
-            speechCapture.stop()
+            runCatching { speechCapture.stop() }
             val transcript = if (demoMode) {
                 demoScript.map { it.text }
             } else {
@@ -274,12 +276,18 @@ fun RecordScreen(
             processingStep = 2
             delay(500)
             processingStep = 3
-            val result = generation.await()
+            val result = runCatching { generation.await() }.getOrNull()
+            if (result == null) {
+                processingError = "Не удалось собрать конспект. Попробуйте записать лекцию ещё раз."
+                return@LaunchedEffect
+            }
             processingStep = 4
             delay(500)
             processingStep = 5
             delay(450)
-            onCompleted(result)
+            runCatching { onCompleted(result) }.onFailure {
+                processingError = "Не удалось открыть конспект. Попробуйте ещё раз."
+            }
         }
     }
 
@@ -290,10 +298,23 @@ fun RecordScreen(
             step = processingStep,
             modifier = modifier
         )
+        if (processingError != null) {
+            AlertDialog(
+                onDismissRequest = {},
+                shape = RoundedCornerShape(28.dp),
+                title = { Text("Не получилось") },
+                text = { Text(processingError.orEmpty()) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        haptics.tap()
+                        onClose()
+                    }) { Text("Закрыть") }
+                }
+            )
+        }
         return
     }
 
-    val haptics = rememberHaptics()
     val dark = LocalKonspektDark.current
     val isPaused = stage == RecordStage.PAUSED
     val active = stage == RecordStage.RECORDING
@@ -692,7 +713,12 @@ private fun RecordingWave(
         repeat(bars) { index ->
             val animated = (kotlin.math.sin(phase + index * 0.7f) + 1f) / 2f
             val live = if (synthetic) animated else amplitude.coerceIn(0f, 1f)
-            val factor = if (active) (0.14f + live * 0.78f) else 0.14f
+            val wobble = (kotlin.math.sin(phase + index * 0.65f) + 1f) / 2f
+            val factor = if (active) {
+                (0.12f + live * (0.55f + 0.33f * wobble)).coerceIn(0.12f, 1f)
+            } else {
+                0.12f
+            }
             val barHeight = size.height * factor
             drawRoundRect(
                 color = color.copy(alpha = if (active) 0.8f else 0.3f),

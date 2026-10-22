@@ -9,7 +9,6 @@ object SeedData {
             name = "Математический анализ",
             shortName = "Матан",
             teacher = "доц. Соколова",
-            room = "402",
             nextClass = "Сегодня, 10:15",
             tone = SubjectTone.SAGE,
             icon = SubjectIcon.FUNCTIONS
@@ -19,7 +18,6 @@ object SeedData {
             name = "Физика",
             shortName = "Физика",
             teacher = "проф. Лебедев",
-            room = "215",
             nextClass = "Сегодня, 12:10",
             tone = SubjectTone.SKY,
             icon = SubjectIcon.SCIENCE
@@ -29,7 +27,6 @@ object SeedData {
             name = "Информатика",
             shortName = "Информатика",
             teacher = "доц. Ким",
-            room = "Лаб. 3",
             nextClass = "Завтра, 09:00",
             tone = SubjectTone.LILAC,
             icon = SubjectIcon.TERMINAL
@@ -39,7 +36,6 @@ object SeedData {
             name = "История",
             shortName = "История",
             teacher = "проф. Орлова",
-            room = "118",
             nextClass = "Чт, 14:30",
             tone = SubjectTone.AMBER,
             icon = SubjectIcon.LANDMARK
@@ -49,7 +45,6 @@ object SeedData {
             name = "Английский язык",
             shortName = "Английский",
             teacher = "ст. преп. Райт",
-            room = "207",
             nextClass = "Пт, 11:20",
             tone = SubjectTone.CLAY,
             icon = SubjectIcon.LANGUAGE
@@ -57,9 +52,9 @@ object SeedData {
     )
 
     val schedule = listOf(
-        ScheduleItem("10:15", "11:40", "math", "Производная сложной функции", "402", true),
-        ScheduleItem("12:10", "13:35", "physics", "Законы Ньютона", "215"),
-        ScheduleItem("15:40", "17:05", "english", "Present Perfect", "207")
+        ScheduleItem("10:15", "11:40", "math", "Производная сложной функции", true),
+        ScheduleItem("12:10", "13:35", "physics", "Законы Ньютона"),
+        ScheduleItem("15:40", "17:05", "english", "Present Perfect")
     )
 
     private fun ago(minutes: Long): Long =

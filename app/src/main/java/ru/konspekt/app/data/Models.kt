@@ -57,7 +57,6 @@ data class Subject(
     val name: String,
     val shortName: String,
     val teacher: String,
-    val room: String,
     val nextClass: String,
     val tone: SubjectTone,
     val icon: SubjectIcon
@@ -104,7 +103,6 @@ data class ScheduleItem(
     val endTime: String,
     val subjectId: String,
     val topic: String,
-    val room: String,
     val isNow: Boolean = false
 )
 

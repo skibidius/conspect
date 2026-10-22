@@ -67,7 +67,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             name = clean,
             shortName = clean,
             teacher = "Преподаватель",
-            room = "—",
             nextClass = "Расписание не задано",
             tone = tone,
             icon = icon
