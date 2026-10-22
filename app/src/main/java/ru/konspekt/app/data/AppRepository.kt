@@ -52,6 +52,18 @@ class AppRepository(context: Context) {
         prefs.edit().putString(KEY_NOTES, gson.toJson(notes)).apply()
     }
 
+    fun loadTrash(): List<Note> {
+        val raw = prefs.getString(KEY_TRASH, null) ?: return emptyList()
+        return runCatching {
+            val type = object : TypeToken<List<Note>>() {}.type
+            gson.fromJson<List<Note>>(raw, type).orEmpty()
+        }.getOrDefault(emptyList())
+    }
+
+    fun saveTrash(notes: List<Note>) {
+        prefs.edit().putString(KEY_TRASH, gson.toJson(notes)).apply()
+    }
+
     fun loadSubjects(): List<Subject> {
         val raw = prefs.getString(KEY_SUBJECTS, null) ?: return emptyList()
         return runCatching {
@@ -68,5 +80,6 @@ class AppRepository(context: Context) {
         const val KEY_SETTINGS = "settings"
         const val KEY_NOTES = "notes"
         const val KEY_SUBJECTS = "subjects"
+        const val KEY_TRASH = "trash"
     }
 }

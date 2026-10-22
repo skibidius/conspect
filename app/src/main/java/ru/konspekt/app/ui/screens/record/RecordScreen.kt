@@ -133,6 +133,7 @@ fun RecordScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val selectedModelSize = remember { VoskModelManager.selected(context).sizeLabel }
     val initialDemoLines = remember(demoMode) {
         if (!demoMode) emptyList() else demoScript.take(4).mapIndexed { index, line ->
             TranscriptLine(
@@ -454,6 +455,7 @@ fun RecordScreen(
             demoMode = demoMode,
             modelDownloading = modelDownloading,
             modelProgress = modelProgress,
+            modelSizeLabel = selectedModelSize,
             listState = transcriptState,
             modifier = Modifier
                 .fillMaxWidth()
@@ -731,7 +733,11 @@ private fun RecordingWave(
 }
 
 @Composable
-private fun ModelDownloadCard(progress: Float, modifier: Modifier = Modifier) {
+private fun ModelDownloadCard(
+    progress: Float,
+    modelSizeLabel: String,
+    modifier: Modifier = Modifier
+) {
     val animatedProgress by animateFloatAsState(
         targetValue = progress,
         animationSpec = tween(250),
@@ -766,7 +772,7 @@ private fun ModelDownloadCard(progress: Float, modifier: Modifier = Modifier) {
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                     Text(
-                        text = "Один раз · ~44 МБ",
+                        text = "Один раз · $modelSizeLabel",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                     )
@@ -807,6 +813,7 @@ private fun TranscriptPanel(
     demoMode: Boolean,
     modelDownloading: Boolean,
     modelProgress: Float,
+    modelSizeLabel: String,
     listState: androidx.compose.foundation.lazy.LazyListState,
     modifier: Modifier = Modifier
 ) {
@@ -874,6 +881,7 @@ private fun TranscriptPanel(
                 if (modelDownloading) {
                     ModelDownloadCard(
                         progress = modelProgress,
+                        modelSizeLabel = modelSizeLabel,
                         modifier = Modifier
                             .align(Alignment.TopCenter)
                             .padding(horizontal = 18.dp, vertical = 8.dp)

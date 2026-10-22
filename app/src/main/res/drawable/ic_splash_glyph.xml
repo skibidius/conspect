@@ -4,18 +4,45 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+
+    <!-- Full-bleed circle: Android 12 masks splash icons to a circle, so this
+         keeps the mark crisp and readable instead of clipping a white page. -->
+    <path
+        android:fillColor="#44584A"
+        android:pathData="M54,0A54,54 0,1 1,54,108A54,54 0,1 1,54,0Z" />
+
+    <!-- Back page -->
+    <path
+        android:fillColor="#CBD7C9"
+        android:pathData="M32,37C32,33 35,30 39,30H53L60,37V79C60,83 57,86 53,86H39C35,86 32,83 32,79Z" />
+
+    <!-- Front page -->
     <path
         android:fillColor="#FBF9F4"
-        android:pathData="M30,40C30,36.13 33.13,33 37,33H53L58,38V78C58,81.87 54.87,85 51,85H37C33.13,85 30,81.87 30,78Z" />
+        android:pathData="M38,32C38,28 41,25 45,25H58L65,32V74C65,78 62,81 58,81H45C41,81 38,78 38,74Z" />
     <path
-        android:fillColor="#FBF9F4"
-        android:pathData="M34,34C34,30.13 37.13,27 41,27H55L64,36V73C64,76.87 60.87,80 57,80H41C37.13,80 34,76.87 34,73Z" />
+        android:fillColor="#DCE3D8"
+        android:pathData="M58,25V31C58,32.66 59.34,34 61,34H65Z" />
+
+    <!-- Ruled lines -->
     <path
-        android:strokeColor="#44584A"
-        android:strokeWidth="2.3"
+        android:strokeColor="#6F8374"
+        android:strokeWidth="2.5"
         android:strokeLineCap="round"
-        android:pathData="M41,45H57M41,53H54M41,61H55" />
+        android:pathData="M45,43H57" />
     <path
-        android:fillColor="#FBF9F4"
-        android:pathData="M67,27C68.05,31.85 69.65,33.45 74.5,34.5C69.65,35.55 68.05,37.15 67,42C65.95,37.15 64.35,35.55 59.5,34.5C64.35,33.45 65.95,31.85 67,27Z" />
+        android:strokeColor="#6F8374"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M45,51H55" />
+    <path
+        android:strokeColor="#9AAC9C"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round"
+        android:pathData="M45,59H56" />
+
+    <!-- Sparkle -->
+    <path
+        android:fillColor="#D8B58F"
+        android:pathData="M72,21C72.9,25.1 74.3,26.5 78.4,27.4C74.3,28.3 72.9,29.7 72,33.8C71.1,29.7 69.7,28.3 65.6,27.4C69.7,26.5 71.1,25.1 72,21Z" />
 </vector>

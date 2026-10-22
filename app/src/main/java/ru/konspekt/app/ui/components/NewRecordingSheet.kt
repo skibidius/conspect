@@ -69,6 +69,7 @@ fun NewRecordingSheet(
     val dark = LocalKonspektDark.current
     val context = LocalContext.current
     val voskReady = remember { VoskModelManager.isReady(context) }
+    val selectedModel = remember { VoskModelManager.selected(context) }
     val haptics = rememberHaptics()
 
     ModalBottomSheet(
@@ -216,7 +217,7 @@ fun NewRecordingSheet(
                     text = if (voskReady) {
                         "Офлайн-модель распознавания готова"
                     } else {
-                        "Модель распознавания загрузится при старте (~44 МБ)"
+                        "Модель распознавания загрузится при старте (${selectedModel.sizeLabel})"
                     },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant

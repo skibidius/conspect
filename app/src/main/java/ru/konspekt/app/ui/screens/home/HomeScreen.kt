@@ -55,6 +55,7 @@ fun HomeScreen(
     notes: List<Note>,
     notesCount: (String) -> Int,
     onOpenNote: (String) -> Unit,
+    onDeleteNote: (String) -> Unit,
     onOpenSubject: (String) -> Unit,
     onAllSubjects: () -> Unit,
     onAllNotes: () -> Unit,
@@ -199,6 +200,7 @@ fun HomeScreen(
                             note = note,
                             subject = subject,
                             onClick = { onOpenNote(note.id) },
+                            onLongClick = { onDeleteNote(note.id) },
                             modifier = Modifier.animateItem().padding(bottom = 10.dp)
                         )
                     }

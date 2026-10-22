@@ -62,6 +62,7 @@ fun SearchScreen(
     notes: List<Note>,
     subjects: List<Subject>,
     onOpenNote: (String) -> Unit,
+    onDeleteNote: (String) -> Unit,
     onOpenSubject: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -272,6 +273,7 @@ fun SearchScreen(
                         note = note,
                         subject = subject,
                         onClick = { onOpenNote(note.id) },
+                        onLongClick = { onDeleteNote(note.id) },
                         modifier = Modifier.padding(bottom = 10.dp)
                     )
                 }

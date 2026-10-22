@@ -35,8 +35,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.ui.graphics.Color
@@ -71,6 +73,7 @@ import ru.konspekt.app.ui.screens.record.RecordScreen
 import ru.konspekt.app.ui.screens.search.SearchScreen
 import ru.konspekt.app.ui.screens.subjects.SubjectDetailScreen
 import ru.konspekt.app.ui.screens.subjects.SubjectsScreen
+import ru.konspekt.app.ui.screens.trash.TrashScreen
 
 private data class BottomDestination(
     val route: String,
@@ -115,6 +118,20 @@ fun KonspektApp(viewModel: AppViewModel) {
 
     fun message(text: String) {
         scope.launch { snackbarHostState.showSnackbar(text) }
+    }
+
+    fun trashNote(id: String) {
+        viewModel.deleteNote(id)
+        scope.launch {
+            val result = snackbarHostState.showSnackbar(
+                message = "Конспект в корзине",
+                actionLabel = "Вернуть",
+                duration = SnackbarDuration.Short
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                viewModel.restoreNote(id)
+            }
+        }
     }
 
     Scaffold(
@@ -205,6 +222,7 @@ fun KonspektApp(viewModel: AppViewModel) {
                     notes = viewModel.notes,
                     notesCount = viewModel::notesCount,
                     onOpenNote = { navController.navigate("note/$it") },
+                    onDeleteNote = ::trashNote,
                     onOpenSubject = { navController.navigate("subject/$it") },
                     onAllSubjects = { navController.navigate("subjects") },
                     onAllNotes = { navController.navigate("library") },
@@ -224,6 +242,10 @@ fun KonspektApp(viewModel: AppViewModel) {
                         viewModel.addSubject(name, tone, icon)
                         message("Предмет добавлен")
                     },
+                    onDeleteSubject = { id ->
+                        viewModel.deleteSubject(id)
+                        message("Предмет и его конспекты удалены")
+                    },
                     onProfile = { navController.navigate("profile") }
                 )
             }
@@ -233,7 +255,10 @@ fun KonspektApp(viewModel: AppViewModel) {
                     notes = viewModel.notes,
                     subjects = viewModel.subjects,
                     onOpenNote = { navController.navigate("note/$it") },
+                    onDeleteNote = ::trashNote,
                     onSearch = { navController.navigate("search") },
+                    onTrash = { navController.navigate("trash") },
+                    trashCount = viewModel.trash.size,
                     onProfile = { navController.navigate("profile") }
                 )
             }
@@ -243,7 +268,25 @@ fun KonspektApp(viewModel: AppViewModel) {
                     notes = viewModel.notes,
                     subjects = viewModel.subjects,
                     onOpenNote = { navController.navigate("note/$it") },
+                    onDeleteNote = ::trashNote,
                     onOpenSubject = { navController.navigate("subject/$it") }
+                )
+            }
+
+            composable("trash") {
+                TrashScreen(
+                    notes = viewModel.trash,
+                    subjects = viewModel.subjects,
+                    onBack = { navController.popBackStack() },
+                    onRestore = { id ->
+                        viewModel.restoreNote(id)
+                        message("Конспект восстановлен")
+                    },
+                    onDeleteForever = viewModel::deleteNotePermanently,
+                    onEmptyTrash = {
+                        viewModel.emptyTrash()
+                        message("Корзина очищена")
+                    }
                 )
             }
 
@@ -274,6 +317,7 @@ fun KonspektApp(viewModel: AppViewModel) {
                         totalMinutes = viewModel.totalMinutesForSubject(subject.id),
                         onBack = { navController.popBackStack() },
                         onOpenNote = { navController.navigate("note/$it") },
+                        onDeleteNote = ::trashNote,
                         onRecord = { openRecording(subject.id) },
                         onUpdateSubject = { name, tone, icon ->
                             viewModel.updateSubject(subject.id, name, tone, icon)

@@ -66,6 +66,7 @@ fun SubjectDetailScreen(
     totalMinutes: Int,
     onBack: () -> Unit,
     onOpenNote: (String) -> Unit,
+    onDeleteNote: (String) -> Unit,
     onRecord: () -> Unit,
     onUpdateSubject: (String, SubjectTone, SubjectIcon) -> Unit,
     modifier: Modifier = Modifier
@@ -263,6 +264,7 @@ fun SubjectDetailScreen(
                         note = note,
                         subject = subject,
                         onClick = { onOpenNote(note.id) },
+                        onLongClick = { onDeleteNote(note.id) },
                         modifier = Modifier.animateItem().padding(bottom = 10.dp)
                     )
                 }

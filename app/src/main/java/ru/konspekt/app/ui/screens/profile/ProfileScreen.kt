@@ -44,6 +44,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -78,6 +80,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import kotlinx.coroutines.launch
 import ru.konspekt.app.BuildConfig
+import ru.konspekt.app.recording.VoskModel
 import ru.konspekt.app.recording.VoskModelManager
 import ru.konspekt.app.data.AiMode
 import ru.konspekt.app.data.Palette
@@ -106,7 +109,11 @@ fun ProfileScreen(
     var showApiKey by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var modelReady by remember { mutableStateOf(VoskModelManager.isReady(context)) }
+    var selectedModel by remember { mutableStateOf(VoskModelManager.selected(context)) }
+    var modelReady by remember {
+        mutableStateOf(VoskModelManager.isReady(context, selectedModel))
+    }
+    var showModelPicker by remember { mutableStateOf(false) }
     var modelDownloading by remember { mutableStateOf(false) }
     var modelProgress by remember { mutableFloatStateOf(0f) }
     var modelError by remember { mutableStateOf<String?>(null) }
@@ -406,9 +413,9 @@ fun ProfileScreen(
                         Spacer(Modifier.height(2.dp))
                         Text(
                             text = if (modelReady) {
-                                "Vosk · русский · ${VoskModelManager.sizeBytes(context) / (1024 * 1024)} МБ"
+                                "Vosk · русский · ${VoskModelManager.sizeBytes(context, selectedModel) / (1024 * 1024)} МБ"
                             } else {
-                                "Vosk · русский · ~44 МБ"
+                                "Vosk · русский · ${selectedModel.sizeLabel}"
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -428,6 +435,50 @@ fun ProfileScreen(
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                             style = MaterialTheme.typography.labelSmall,
                             color = statusContent
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(14.dp))
+                Surface(
+                    onClick = {
+                        if (!modelDownloading) {
+                            haptics.tap()
+                            showModelPicker = true
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Tune,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(19.dp)
+                        )
+                        Spacer(Modifier.size(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Модель",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "${selectedModel.title} · ${selectedModel.sizeLabel}",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Rounded.ChevronRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }
@@ -485,11 +536,11 @@ fun ProfileScreen(
                                     modelProgress = 0f
                                     modelError = null
                                     scope.launch {
-                                        val ok = VoskModelManager.downloadModel(context, force = true) { p ->
-                                            modelProgress = p
+                                        val ok = VoskModelManager.downloadModel(context, model = selectedModel, force = true) { p ->
+                                            scope.launch { modelProgress = p }
                                         }
                                         modelDownloading = false
-                                        modelReady = VoskModelManager.isReady(context)
+                                        modelReady = VoskModelManager.isReady(context, selectedModel)
                                         if (!ok) modelError = "Не удалось обновить модель"
                                     }
                                 },
@@ -503,7 +554,7 @@ fun ProfileScreen(
                             OutlinedButton(
                                 onClick = {
                                     haptics.tap()
-                                    VoskModelManager.delete(context)
+                                    VoskModelManager.delete(context, selectedModel)
                                     modelReady = false
                                     modelProgress = 0f
                                     modelError = null
@@ -531,11 +582,11 @@ fun ProfileScreen(
                                 modelProgress = 0f
                                 modelError = null
                                 scope.launch {
-                                    val ok = VoskModelManager.downloadModel(context) { p ->
-                                        modelProgress = p
+                                    val ok = VoskModelManager.downloadModel(context, model = selectedModel) { p ->
+                                        scope.launch { modelProgress = p }
                                     }
                                     modelDownloading = false
-                                    modelReady = VoskModelManager.isReady(context)
+                                    modelReady = VoskModelManager.isReady(context, selectedModel)
                                     if (!ok) modelError = "Не удалось скачать модель"
                                 }
                             },
@@ -550,7 +601,7 @@ fun ProfileScreen(
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(Modifier.size(8.dp))
-                            Text("Скачать модель · 44 МБ")
+                            Text("Скачать · ${selectedModel.sizeLabel}")
                         }
                     }
                 }
@@ -608,6 +659,129 @@ fun ProfileScreen(
             Spacer(Modifier.height(20.dp))
         }
     }
+
+    if (showModelPicker) {
+        ModelPickerDialog(
+            selected = selectedModel,
+            onSelect = { model ->
+                VoskModelManager.select(context, model)
+                selectedModel = model
+                modelReady = VoskModelManager.isReady(context, model)
+                modelProgress = 0f
+                modelError = null
+                showModelPicker = false
+            },
+            onDismiss = { showModelPicker = false }
+        )
+    }
+}
+
+@Composable
+private fun ModelPickerDialog(
+    selected: VoskModel,
+    onSelect: (VoskModel) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val haptics = rememberHaptics()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(28.dp),
+        title = { Text("Модель распознавания") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                VoskModel.entries.forEach { model ->
+                    val ready = VoskModelManager.isReady(context, model)
+                    val active = selected == model
+                    Surface(
+                        onClick = {
+                            haptics.tap()
+                            onSelect(model)
+                        },
+                        shape = RoundedCornerShape(18.dp),
+                        color = if (active) {
+                            MaterialTheme.colorScheme.secondaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.surfaceContainerHigh
+                        }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(
+                                        if (active) {
+                                            MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.08f)
+                                        } else {
+                                            MaterialTheme.colorScheme.surfaceContainerHighest
+                                        }
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = if (ready) Icons.Rounded.CheckCircle
+                                    else Icons.Rounded.CloudDownload,
+                                    contentDescription = null,
+                                    tint = if (active) {
+                                        MaterialTheme.colorScheme.onSecondaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(Modifier.size(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = model.title,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = if (active) {
+                                        MaterialTheme.colorScheme.onSecondaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurface
+                                    }
+                                )
+                                Text(
+                                    text = model.description,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (active) {
+                                        MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.72f)
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    }
+                                )
+                                Spacer(Modifier.height(3.dp))
+                                Text(
+                                    text = if (ready) {
+                                        "Скачана · ${model.sizeLabel}"
+                                    } else {
+                                        "Не скачана · ${model.sizeLabel}"
+                                    },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (ready) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    }
+                                )
+                            }
+                            RadioButton(selected = active, onClick = null)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                haptics.tap()
+                onDismiss()
+            }) { Text("Закрыть") }
+        }
+    )
 }
 
 @Composable

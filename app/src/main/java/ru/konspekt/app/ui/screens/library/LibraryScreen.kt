@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Sort
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -54,7 +55,10 @@ fun LibraryScreen(
     notes: List<Note>,
     subjects: List<Subject>,
     onOpenNote: (String) -> Unit,
+    onDeleteNote: (String) -> Unit,
     onSearch: () -> Unit,
+    onTrash: () -> Unit,
+    trashCount: Int,
     onProfile: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -70,6 +74,27 @@ fun LibraryScreen(
         TopAppBar(
             title = { Text("Библиотека") },
             actions = {
+                IconButton(onClick = {
+                    haptics.tap()
+                    onTrash()
+                }) {
+                    Box {
+                        Icon(
+                            imageVector = Icons.Rounded.DeleteOutline,
+                            contentDescription = "Корзина",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (trashCount > 0) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .size(7.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.error)
+                            )
+                        }
+                    }
+                }
                 UserAvatar(
                     name = "Аня",
                     modifier = Modifier
@@ -198,6 +223,7 @@ fun LibraryScreen(
                     note = note,
                     subject = subject,
                     onClick = { onOpenNote(note.id) },
+                    onLongClick = { onDeleteNote(note.id) },
                     modifier = Modifier.animateItem().padding(bottom = 10.dp)
                 )
             }

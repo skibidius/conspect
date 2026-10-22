@@ -32,6 +32,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     )
         private set
 
+    var trash by mutableStateOf(repository.loadTrash())
+        private set
+
     var hasDeepSeekKey by mutableStateOf(apiKeyStore.hasKey())
         private set
 
@@ -175,12 +178,46 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun deleteNote(id: String) {
+        val note = notes.firstOrNull { it.id == id } ?: return
         notes = notes.filterNot { it.id == id }
+        trash = listOf(note) + trash.filterNot { it.id == id }
         persistLocalNotes()
+        persistTrash()
+    }
+
+    fun restoreNote(id: String) {
+        val note = trash.firstOrNull { it.id == id } ?: return
+        trash = trash.filterNot { it.id == id }
+        notes = (listOf(note) + notes).sortedByDescending { it.createdAt }
+        persistLocalNotes()
+        persistTrash()
+    }
+
+    fun deleteNotePermanently(id: String) {
+        trash = trash.filterNot { it.id == id }
+        persistTrash()
+    }
+
+    fun emptyTrash() {
+        trash = emptyList()
+        persistTrash()
+    }
+
+    fun deleteSubject(id: String) {
+        subjects = subjects.filterNot { it.id == id }
+        notes = notes.filterNot { it.subjectId == id }
+        trash = trash.filterNot { it.subjectId == id }
+        repository.saveSubjects(subjects.filter { it.id.startsWith("custom-") })
+        persistLocalNotes()
+        persistTrash()
     }
 
     private fun persistLocalNotes() {
         repository.saveNotes(notes.filter { note -> SeedData.notes.none { it.id == note.id } })
+    }
+
+    private fun persistTrash() {
+        repository.saveTrash(trash)
     }
 
     private fun curatedNoteFor(subject: Subject): Note? = when (subject.id) {

@@ -1,6 +1,8 @@
 package ru.konspekt.app.ui.components
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -141,21 +143,32 @@ fun AiPill(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun NoteRow(
     note: Note,
     subject: Subject,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    showDate: Boolean = true
+    showDate: Boolean = true,
+    onLongClick: (() -> Unit)? = null
 ) {
     val haptics = rememberHaptics()
     Surface(
-        onClick = {
-            haptics.tap()
-            onClick()
-        },
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = {
+                    haptics.tap()
+                    onClick()
+                },
+                onLongClick = onLongClick?.let {
+                    {
+                        haptics.confirm()
+                        it()
+                    }
+                }
+            ),
         shape = RoundedCornerShape(22.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow
     ) {

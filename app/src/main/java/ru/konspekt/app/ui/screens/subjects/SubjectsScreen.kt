@@ -1,8 +1,10 @@
 package ru.konspekt.app.ui.screens.subjects
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -69,10 +71,12 @@ fun SubjectsScreen(
     totalMinutes: (String) -> Int,
     onOpenSubject: (String) -> Unit,
     onAddSubject: (String, SubjectTone, SubjectIcon) -> Unit,
+    onDeleteSubject: (String) -> Unit,
     onProfile: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
+    var subjectToDelete by remember { mutableStateOf<Subject?>(null) }
     val totalNotes = subjects.sumOf { notesCount(it.id) }
     val haptics = rememberHaptics()
 
@@ -150,7 +154,8 @@ fun SubjectsScreen(
                 subject = subject,
                 noteCount = notesCount(subject.id),
                 minutes = totalMinutes(subject.id),
-                onClick = { onOpenSubject(subject.id) }
+                onClick = { onOpenSubject(subject.id) },
+                onLongClick = { subjectToDelete = subject }
             )
         }
 
@@ -166,6 +171,34 @@ fun SubjectsScreen(
             onConfirm = { name, tone, icon ->
                 onAddSubject(name, tone, icon)
                 showAddDialog = false
+            }
+        )
+    }
+
+    subjectToDelete?.let { subject ->
+        AlertDialog(
+            onDismissRequest = { subjectToDelete = null },
+            shape = RoundedCornerShape(28.dp),
+            title = { Text("Удалить предмет?") },
+            text = {
+                Text("«${subject.name}» и все его конспекты будут удалены безвозвратно.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    haptics.confirm()
+                    onDeleteSubject(subject.id)
+                    subjectToDelete = null
+                }) {
+                    Text("Удалить", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    haptics.tap()
+                    subjectToDelete = null
+                }) {
+                    Text("Отмена")
+                }
             }
         )
     }
@@ -231,25 +264,33 @@ private fun SemesterSummaryCard(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SubjectGridCard(
     subject: Subject,
     noteCount: Int,
     minutes: Int,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
 ) {
     val dark = LocalKonspektDark.current
     val container = subject.tone.container(dark)
     val onContainer = subject.tone.onContainer(dark)
     val haptics = rememberHaptics()
     Surface(
-        onClick = {
-            haptics.tap()
-            onClick()
-        },
         modifier = Modifier
             .fillMaxWidth()
-            .height(206.dp),
+            .height(206.dp)
+            .combinedClickable(
+                onClick = {
+                    haptics.tap()
+                    onClick()
+                },
+                onLongClick = {
+                    haptics.confirm()
+                    onLongClick()
+                }
+            ),
         shape = RoundedCornerShape(24.dp),
         color = container
     ) {
