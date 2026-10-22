@@ -51,6 +51,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun totalMinutesForSubject(subjectId: String): Int =
         notes.filter { it.subjectId == subjectId }.sumOf { it.durationMinutes }
 
+    fun updateSubject(id: String, name: String, tone: SubjectTone, icon: SubjectIcon) {
+        val clean = name.trim()
+        if (clean.isBlank()) return
+        subjects = subjects.map {
+            if (it.id == id) it.copy(name = clean, shortName = clean, tone = tone, icon = icon) else it
+        }
+        repository.saveSubjects(subjects.filter { it.id.startsWith("custom-") })
+    }
+
     fun addSubject(name: String, tone: SubjectTone, icon: SubjectIcon): Subject {
         val clean = name.trim()
         val subject = Subject(

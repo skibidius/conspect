@@ -190,7 +190,7 @@ fun LibraryScreen(
                     note = note,
                     subject = subject,
                     onClick = { onOpenNote(note.id) },
-                    modifier = Modifier.padding(bottom = 10.dp)
+                    modifier = Modifier.animateItem().padding(bottom = 10.dp)
                 )
             }
             }

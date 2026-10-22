@@ -9,6 +9,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -74,7 +75,9 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -276,6 +279,7 @@ fun RecordScreen(
         return
     }
 
+    val haptics = LocalHapticFeedback.current
     val dark = LocalKonspektDark.current
     val isPaused = stage == RecordStage.PAUSED
     val active = stage == RecordStage.RECORDING
@@ -350,13 +354,18 @@ fun RecordScreen(
             )
         )
 
+        val smoothAmplitude by animateFloatAsState(
+            targetValue = amplitude,
+            animationSpec = tween(120),
+            label = "amplitude"
+        )
         RecordingStage(
             subject = subject,
             elapsed = elapsed,
             active = active,
             paused = isPaused,
             demoMode = demoMode,
-            amplitude = amplitude,
+            amplitude = smoothAmplitude,
             onPause = {
                 if (stage == RecordStage.RECORDING) {
                     stage = RecordStage.PAUSED
@@ -367,6 +376,7 @@ fun RecordScreen(
                 }
             },
             onStop = {
+                haptics.performHapticFeedback(HapticFeedbackType.Confirm)
                 if (!demoMode && lines.isEmpty() && partialText.isBlank()) {
                     showNoSpeechDialog = true
                 } else {

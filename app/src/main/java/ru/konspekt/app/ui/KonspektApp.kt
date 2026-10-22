@@ -3,6 +3,8 @@ package ru.konspekt.app.ui
 import android.net.Uri
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -42,6 +44,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
@@ -50,6 +54,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.navArgument
 import kotlinx.coroutines.launch
 import ru.konspekt.app.BuildConfig
@@ -94,6 +99,17 @@ fun KonspektApp(viewModel: AppViewModel) {
         showRecordingSheet = true
     }
 
+    val haptics = LocalHapticFeedback.current
+
+    fun navigateTab(route: String) {
+        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        navController.navigate(route) {
+            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
+
     fun message(text: String) {
         scope.launch { snackbarHostState.showSnackbar(text) }
     }
@@ -109,13 +125,7 @@ fun KonspektApp(viewModel: AppViewModel) {
                     bottomDestinations.forEach { destination ->
                         NavigationBarItem(
                             selected = currentRoute == destination.route,
-                            onClick = {
-                                navController.navigate(destination.route) {
-                                    popUpTo("home") { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
+                            onClick = { navigateTab(destination.route) },
                             icon = {
                                 Icon(
                                     imageVector = destination.icon,
@@ -145,6 +155,7 @@ fun KonspektApp(viewModel: AppViewModel) {
             if (isRoot) {
                 ExtendedFloatingActionButton(
                     onClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         if (viewModel.subjects.isEmpty()) {
                             navController.navigate("subjects")
                         } else {
@@ -171,10 +182,18 @@ fun KonspektApp(viewModel: AppViewModel) {
             navController = navController,
             startDestination = "home",
             modifier = Modifier.fillMaxSize(),
-            enterTransition = { fadeIn(tween(220)) },
-            exitTransition = { fadeOut(tween(120)) },
-            popEnterTransition = { fadeIn(tween(220)) },
-            popExitTransition = { fadeOut(tween(120)) }
+            enterTransition = {
+                slideInHorizontally(animationSpec = tween(300)) { it } + fadeIn(tween(300))
+            },
+            exitTransition = {
+                slideOutHorizontally(animationSpec = tween(300)) { -it / 3 } + fadeOut(tween(300))
+            },
+            popEnterTransition = {
+                slideInHorizontally(animationSpec = tween(300)) { -it / 3 } + fadeIn(tween(300))
+            },
+            popExitTransition = {
+                slideOutHorizontally(animationSpec = tween(300)) { it } + fadeOut(tween(300))
+            }
         ) {
             composable("home") {
                 HomeScreen(
@@ -252,7 +271,11 @@ fun KonspektApp(viewModel: AppViewModel) {
                         totalMinutes = viewModel.totalMinutesForSubject(subject.id),
                         onBack = { navController.popBackStack() },
                         onOpenNote = { navController.navigate("note/$it") },
-                        onRecord = { openRecording(subject.id) }
+                        onRecord = { openRecording(subject.id) },
+                        onUpdateSubject = { name, tone, icon ->
+                            viewModel.updateSubject(subject.id, name, tone, icon)
+                            message("Предмет обновлён")
+                        }
                     )
                 }
             }

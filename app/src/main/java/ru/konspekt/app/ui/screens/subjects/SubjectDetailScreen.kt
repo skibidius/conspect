@@ -1,6 +1,7 @@
 package ru.konspekt.app.ui.screens.subjects
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,11 +20,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Apartment
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -32,14 +37,22 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import ru.konspekt.app.data.Note
 import ru.konspekt.app.data.Subject
+import ru.konspekt.app.data.SubjectIcon
+import ru.konspekt.app.data.SubjectTone
 import ru.konspekt.app.ui.components.EmptyState
 import ru.konspekt.app.ui.components.NoteRow
 import ru.konspekt.app.ui.theme.LocalKonspektDark
@@ -54,9 +67,11 @@ fun SubjectDetailScreen(
     onBack: () -> Unit,
     onOpenNote: (String) -> Unit,
     onRecord: () -> Unit,
+    onUpdateSubject: (String, SubjectTone, SubjectIcon) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val dark = LocalKonspektDark.current
+    var showEdit by remember { mutableStateOf(false) }
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -73,6 +88,13 @@ fun SubjectDetailScreen(
                 }
             },
             actions = {
+                IconButton(onClick = { showEdit = true }) {
+                    Icon(
+                        imageVector = Icons.Rounded.Edit,
+                        contentDescription = "Редактировать предмет",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 IconButton(onClick = onRecord) {
                     Icon(
                         imageVector = Icons.Rounded.Mic,
@@ -241,10 +263,123 @@ fun SubjectDetailScreen(
                         note = note,
                         subject = subject,
                         onClick = { onOpenNote(note.id) },
-                        modifier = Modifier.padding(bottom = 10.dp)
+                        modifier = Modifier.animateItem().padding(bottom = 10.dp)
                     )
                 }
             }
         }
     }
+
+    if (showEdit) {
+        EditSubjectDialog(
+            subject = subject,
+            onDismiss = { showEdit = false },
+            onConfirm = { name, tone, icon ->
+                onUpdateSubject(name, tone, icon)
+                showEdit = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun EditSubjectDialog(
+    subject: Subject,
+    onDismiss: () -> Unit,
+    onConfirm: (String, SubjectTone, SubjectIcon) -> Unit
+) {
+    var name by remember { mutableStateOf(subject.name) }
+    var tone by remember { mutableStateOf(subject.tone) }
+    var icon by remember { mutableStateOf(subject.icon) }
+    val icons = listOf(
+        SubjectIcon.FUNCTIONS, SubjectIcon.SCIENCE, SubjectIcon.TERMINAL,
+        SubjectIcon.LANDMARK, SubjectIcon.LANGUAGE, SubjectIcon.BIOTECH
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(28.dp),
+        title = { Text("Редактировать предмет") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Название") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(14.dp),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    text = "Цвет",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    SubjectTone.entries.forEach { item ->
+                        val dark = LocalKonspektDark.current
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(item.container(dark))
+                                .clickable { tone = item },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (tone == item) {
+                                Text(
+                                    text = "✓",
+                                    color = item.onContainer(dark),
+                                    style = MaterialTheme.typography.labelLarge
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    text = "Иконка",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    icons.forEach { item ->
+                        val selected = icon == item
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(
+                                    if (selected) MaterialTheme.colorScheme.secondaryContainer
+                                    else MaterialTheme.colorScheme.surfaceContainerHigh
+                                )
+                                .clickable { icon = item },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = item.vector,
+                                contentDescription = null,
+                                tint = if (selected) MaterialTheme.colorScheme.onSecondaryContainer
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirm(name.trim(), tone, icon) },
+                enabled = name.isNotBlank()
+            ) { Text("Сохранить") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Отмена") }
+        }
+    )
 }

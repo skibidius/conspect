@@ -19,6 +19,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.CloudDownload
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -34,6 +36,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import ru.konspekt.app.recording.VoskModelManager
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,6 +67,8 @@ fun NewRecordingSheet(
     }
     var topic by remember { mutableStateOf("") }
     val dark = LocalKonspektDark.current
+    val context = LocalContext.current
+    val voskReady = remember { VoskModelManager.isReady(context) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -189,14 +195,19 @@ fun NewRecordingSheet(
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    imageVector = Icons.Rounded.Lock,
+                    imageVector = if (voskReady) Icons.Rounded.CheckCircle else Icons.Rounded.CloudDownload,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(13.dp)
+                    tint = if (voskReady) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(14.dp)
                 )
                 Spacer(Modifier.width(5.dp))
                 Text(
-                    text = "Аудио не покидает устройство",
+                    text = if (voskReady) {
+                        "Офлайн-модель распознавания готова"
+                    } else {
+                        "Модель распознавания загрузится при старте (~44 МБ)"
+                    },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

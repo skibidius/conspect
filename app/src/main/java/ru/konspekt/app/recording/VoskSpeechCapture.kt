@@ -6,6 +6,7 @@ import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.vosk.Model
@@ -96,6 +97,7 @@ class VoskSpeechCapture(
 
     private fun readLoop(record: AudioRecord, rec: Recognizer) {
         val bytes = ByteArray(4096)
+        var lastAmplitudeAt = 0L
         while (running) {
             val read = record.read(bytes, 0, bytes.size)
             if (read <= 0) continue
@@ -108,8 +110,10 @@ class VoskSpeechCapture(
                 i += 2
             }
             val samples = read / 2
-            if (samples > 0) {
+            val now = SystemClock.elapsedRealtime()
+            if (samples > 0 && now - lastAmplitudeAt >= 90) {
                 val rms = sqrt(sum / samples) / 32768.0
+                lastAmplitudeAt = now
                 post { onAmplitude(rms.toFloat().coerceIn(0f, 1f)) }
             }
 

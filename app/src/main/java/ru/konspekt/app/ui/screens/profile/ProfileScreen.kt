@@ -56,6 +56,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -65,6 +68,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ru.konspekt.app.BuildConfig
+import ru.konspekt.app.recording.VoskModelManager
 import ru.konspekt.app.data.AiMode
 import ru.konspekt.app.data.Palette
 import ru.konspekt.app.data.ThemeMode
@@ -90,6 +94,8 @@ fun ProfileScreen(
 ) {
     var apiKeyInput by remember { mutableStateOf("") }
     var showApiKey by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val voskReady = remember { VoskModelManager.isReady(context) }
 
     Column(
         modifier = modifier
@@ -310,6 +316,35 @@ fun ProfileScreen(
             }
 
             Spacer(Modifier.height(26.dp))
+            SectionLabel("Модели")
+            Spacer(Modifier.height(10.dp))
+            SettingsCard {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Распознавание речи",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Vosk · русский",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Text(
+                        text = if (voskReady) "Скачана" else "Не скачана",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = if (voskReady) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(26.dp))
             SectionLabel("Приватность")
             Spacer(Modifier.height(10.dp))
             Surface(
@@ -353,26 +388,12 @@ fun ProfileScreen(
             }
 
             Spacer(Modifier.height(26.dp))
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(22.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerLow
-            ) {
-                Column {
-                    InfoRow("Версия", BuildConfig.VERSION_NAME)
-                    DividerLine(Modifier.padding(horizontal = 16.dp))
-                    InfoRow("Обработка", if (settings.aiMode == AiMode.DEEPSEEK) "DeepSeek" else "Локальная")
-                    DividerLine(Modifier.padding(horizontal = 16.dp))
-                    InfoRow("Данные", "Приватное хранилище")
-                }
-            }
-            Spacer(Modifier.height(20.dp))
             Text(
-                text = "Conspect · сделано для студентов",
+                text = "Версия ${BuildConfig.VERSION_NAME}",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                modifier = Modifier.align(Alignment.CenterHorizontally)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            Spacer(Modifier.height(20.dp))
         }
     }
 }
@@ -599,6 +620,7 @@ private fun SwitchRow(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
+    val haptics = LocalHapticFeedback.current
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
@@ -630,7 +652,13 @@ private fun SwitchRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(
+            checked = checked,
+            onCheckedChange = {
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onCheckedChange(it)
+            }
+        )
     }
 }
 
