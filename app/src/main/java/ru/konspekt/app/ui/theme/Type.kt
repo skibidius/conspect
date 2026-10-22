@@ -6,14 +6,11 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import ru.konspekt.app.R
 
-/**
- * Google Sans for Latin text and numerals, with the system Roboto fallback for
- * Cyrillic (Google Sans does not ship Cyrillic glyphs).
- */
+/** Official Google Sans (SIL OFL) with full Latin + Cyrillic coverage. */
 val GoogleSansFamily = FontFamily(
     Font(R.font.google_sans_regular, FontWeight.Normal),
     Font(R.font.google_sans_medium, FontWeight.Medium),
-    Font(R.font.google_sans_semibold, FontWeight.SemiBold),
+    Font(R.font.google_sans_medium, FontWeight.SemiBold),
     Font(R.font.google_sans_bold, FontWeight.Bold)
 )
 

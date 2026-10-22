@@ -22,10 +22,15 @@ android {
         applicationId = "ru.konspekt.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 4
-        versionName = (project.findProperty("versionName") as String?) ?: "1.3.0"
+        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 5
+        versionName = (project.findProperty("versionName") as String?) ?: "1.4.0"
 
         vectorDrawables.useSupportLibrary = true
+        ndk {
+            // Vosk ships large native libraries for every ABI. ARM covers
+            // essentially all real Android phones and keeps the APK small.
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
     }
 
     signingConfigs {

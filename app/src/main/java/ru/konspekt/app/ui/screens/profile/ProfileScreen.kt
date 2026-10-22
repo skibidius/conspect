@@ -23,7 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.ChevronRight
-import androidx.compose.material.icons.rounded.CloudOff
+import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.FilterAlt
 import androidx.compose.material.icons.rounded.Lock
@@ -37,6 +37,7 @@ import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -53,6 +54,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -67,6 +70,9 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import kotlinx.coroutines.launch
 import ru.konspekt.app.BuildConfig
 import ru.konspekt.app.recording.VoskModelManager
 import ru.konspekt.app.data.AiMode
@@ -74,7 +80,6 @@ import ru.konspekt.app.data.Palette
 import ru.konspekt.app.data.ThemeMode
 import ru.konspekt.app.data.UserSettings
 import ru.konspekt.app.ui.components.DividerLine
-import ru.konspekt.app.ui.components.UserAvatar
 import ru.konspekt.app.ui.theme.LocalKonspektDark
 import ru.konspekt.app.ui.theme.konspektColorScheme
 
@@ -95,7 +100,16 @@ fun ProfileScreen(
     var apiKeyInput by remember { mutableStateOf("") }
     var showApiKey by remember { mutableStateOf(false) }
     val context = LocalContext.current
-    val voskReady = remember { VoskModelManager.isReady(context) }
+    val scope = rememberCoroutineScope()
+    var modelReady by remember { mutableStateOf(VoskModelManager.isReady(context)) }
+    var modelDownloading by remember { mutableStateOf(false) }
+    var modelProgress by remember { mutableFloatStateOf(0f) }
+    var modelError by remember { mutableStateOf<String?>(null) }
+    val animatedModelProgress by animateFloatAsState(
+        targetValue = modelProgress,
+        animationSpec = tween(300),
+        label = "model-progress"
+    )
 
     Column(
         modifier = modifier
@@ -124,8 +138,6 @@ fun ProfileScreen(
                 .padding(horizontal = 16.dp)
                 .padding(top = 4.dp, bottom = 36.dp)
         ) {
-            ProfileHeader(settings.userName)
-            Spacer(Modifier.height(12.dp))
             SettingsCard {
                 SettingHeader(
                     icon = Icons.Rounded.Person,
@@ -330,17 +342,111 @@ fun ProfileScreen(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "Vosk · русский",
+                            text = if (modelReady) {
+                                "Vosk · русский · ${VoskModelManager.sizeBytes(context) / (1024 * 1024)} МБ"
+                            } else {
+                                "Vosk · русский · ~44 МБ"
+                            },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     Text(
-                        text = if (voskReady) "Скачана" else "Не скачана",
+                        text = when {
+                            modelDownloading -> "Загрузка"
+                            modelReady -> "Скачана"
+                            else -> "Не скачана"
+                        },
                         style = MaterialTheme.typography.labelLarge,
-                        color = if (voskReady) MaterialTheme.colorScheme.primary
+                        color = if (modelReady) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+
+                if (modelDownloading) {
+                    Spacer(Modifier.height(12.dp))
+                    LinearProgressIndicator(
+                        progress = { animatedModelProgress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
+                            .clip(RoundedCornerShape(4.dp)),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = "Скачивание модели… ${(modelProgress * 100).toInt()}%",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                if (modelError != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = modelError.orEmpty(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+
+                if (!modelDownloading) {
+                    Spacer(Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (modelReady) {
+                        TextButton(
+                            onClick = {
+                                modelDownloading = true
+                                modelProgress = 0f
+                                modelError = null
+                                scope.launch {
+                                    val ok = VoskModelManager.downloadModel(context, force = true) { p ->
+                                        modelProgress = p
+                                    }
+                                    modelDownloading = false
+                                    modelReady = VoskModelManager.isReady(context)
+                                    if (!ok) modelError = "Не удалось обновить модель"
+                                }
+                            },
+                            enabled = !modelDownloading
+                        ) { Text("Обновить") }
+                        TextButton(
+                            onClick = {
+                                VoskModelManager.delete(context)
+                                modelReady = false
+                                modelProgress = 0f
+                                modelError = null
+                            },
+                            enabled = !modelDownloading
+                        ) { Text("Удалить") }
+                    } else {
+                        Button(
+                            onClick = {
+                                modelDownloading = true
+                                modelProgress = 0f
+                                modelError = null
+                                scope.launch {
+                                    val ok = VoskModelManager.downloadModel(context) { p ->
+                                        modelProgress = p
+                                    }
+                                    modelDownloading = false
+                                    modelReady = VoskModelManager.isReady(context)
+                                    if (!ok) modelError = "Не удалось скачать модель"
+                                }
+                            },
+                            enabled = !modelDownloading
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.CloudDownload,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.size(8.dp))
+                            Text("Скачать модель")
+                        }
+                    }
+                    }
                 }
             }
 
@@ -394,36 +500,6 @@ fun ProfileScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(20.dp))
-        }
-    }
-}
-
-@Composable
-private fun ProfileHeader(name: String) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow
-    ) {
-        Row(
-            modifier = Modifier.padding(18.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            UserAvatar(name = name, size = 56.dp)
-            Spacer(Modifier.size(14.dp))
-            Column {
-                Text(
-                    text = name,
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = "Данные хранятся только на устройстве",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
         }
     }
 }

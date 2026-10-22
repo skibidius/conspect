@@ -29,18 +29,11 @@ object VoskModelManager {
 
     suspend fun ensure(context: Context, onProgress: (Float) -> Unit = {}): Model? =
         withContext(Dispatchers.IO) {
-            model?.let { return@withContext it }
             synchronized(lock) {
                 model?.let { return@withContext it }
                 try {
-                    val dir = File(context.filesDir, DIR_NAME)
-                    if (!isReady(context)) {
-                        dir.deleteRecursively()
-                        val zip = File(context.cacheDir, "vosk-model-ru.zip")
-                        download(zip, onProgress)
-                        unzip(zip, dir)
-                        zip.delete()
-                    }
+                    val dir = modelDir(context)
+                    if (!isReady(context)) prepareFiles(context, dir, onProgress)
                     val loaded = Model(dir.absolutePath)
                     model = loaded
                     loaded
@@ -49,6 +42,48 @@ object VoskModelManager {
                 }
             }
         }
+
+    suspend fun downloadModel(
+        context: Context,
+        force: Boolean = false,
+        onProgress: (Float) -> Unit = {}
+    ): Boolean = withContext(Dispatchers.IO) {
+        synchronized(lock) {
+            try {
+                val dir = modelDir(context)
+                if (force) {
+                    model?.let { runCatching { it.close() } }
+                    model = null
+                    dir.deleteRecursively()
+                }
+                if (!isReady(context)) prepareFiles(context, dir, onProgress)
+                true
+            } catch (e: Exception) {
+                false
+            }
+        }
+    }
+
+    fun delete(context: Context) {
+        synchronized(lock) {
+            model?.let { runCatching { it.close() } }
+            model = null
+            modelDir(context).deleteRecursively()
+        }
+    }
+
+    fun sizeBytes(context: Context): Long =
+        modelDir(context).walkTopDown().filter { it.isFile }.sumOf { it.length() }
+
+    fun modelDir(context: Context): File = File(context.filesDir, DIR_NAME)
+
+    private fun prepareFiles(context: Context, dir: File, onProgress: (Float) -> Unit) {
+        dir.deleteRecursively()
+        val zip = File(context.cacheDir, "vosk-model-ru.zip")
+        download(zip, onProgress)
+        unzip(zip, dir)
+        zip.delete()
+    }
 
     private fun download(dest: File, onProgress: (Float) -> Unit) {
         val connection = (URL(MODEL_URL).openConnection() as HttpURLConnection).apply {

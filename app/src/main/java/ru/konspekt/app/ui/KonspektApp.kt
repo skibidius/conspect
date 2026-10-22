@@ -3,8 +3,11 @@ package ru.konspekt.app.ui
 import android.net.Uri
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -55,6 +58,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavGraphBuilder
 import androidx.navigation.navArgument
 import kotlinx.coroutines.launch
 import ru.konspekt.app.BuildConfig
@@ -195,7 +199,7 @@ fun KonspektApp(viewModel: AppViewModel) {
                 slideOutHorizontally(animationSpec = tween(300)) { it } + fadeOut(tween(300))
             }
         ) {
-            composable("home") {
+            tabComposable("home") {
                 HomeScreen(
                     userName = viewModel.settings.userName,
                     subjects = viewModel.subjects,
@@ -211,7 +215,7 @@ fun KonspektApp(viewModel: AppViewModel) {
                 )
             }
 
-            composable("subjects") {
+            tabComposable("subjects") {
                 SubjectsScreen(
                     subjects = viewModel.subjects,
                     notesCount = viewModel::notesCount,
@@ -225,7 +229,7 @@ fun KonspektApp(viewModel: AppViewModel) {
                 )
             }
 
-            composable("library") {
+            tabComposable("library") {
                 LibraryScreen(
                     notes = viewModel.notes,
                     subjects = viewModel.subjects,
@@ -235,7 +239,7 @@ fun KonspektApp(viewModel: AppViewModel) {
                 )
             }
 
-            composable("search") {
+            tabComposable("search") {
                 SearchScreen(
                     notes = viewModel.notes,
                     subjects = viewModel.subjects,
@@ -307,7 +311,19 @@ fun KonspektApp(viewModel: AppViewModel) {
                         type = NavType.StringType
                         defaultValue = ""
                     }
-                )
+                ),
+                enterTransition = {
+                    slideInVertically(tween(340)) { it } + fadeIn(tween(340))
+                },
+                exitTransition = {
+                    slideOutVertically(tween(280)) { it } + fadeOut(tween(280))
+                },
+                popEnterTransition = {
+                    fadeIn(tween(280))
+                },
+                popExitTransition = {
+                    slideOutVertically(tween(280)) { it } + fadeOut(tween(280))
+                }
             ) { entry ->
                 val subjectId = entry.arguments?.getString("subjectId").orEmpty()
                 val topic = entry.arguments?.getString("topic").orEmpty()
@@ -361,4 +377,23 @@ fun KonspektApp(viewModel: AppViewModel) {
             }
         )
     }
+}
+
+
+private fun NavGraphBuilder.tabComposable(
+    route: String,
+    content: @Composable () -> Unit
+) {
+    composable(
+        route = route,
+        enterTransition = {
+            fadeIn(tween(220)) + scaleIn(initialScale = 0.97f, animationSpec = tween(220))
+        },
+        exitTransition = { fadeOut(tween(160)) },
+        popEnterTransition = {
+            fadeIn(tween(220)) + scaleIn(initialScale = 0.98f, animationSpec = tween(220))
+        },
+        popExitTransition = { fadeOut(tween(160)) },
+        content = { content() }
+    )
 }

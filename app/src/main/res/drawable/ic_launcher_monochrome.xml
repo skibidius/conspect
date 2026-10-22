@@ -4,13 +4,12 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- Themed (Material You) icon: one clear silhouette with cut-out ruled lines. -->
     <path
         android:fillColor="#000000"
-        android:pathData="M35,40C35,36.13 38.13,33 42,33H58L63,38V78C63,81.87 59.87,85 56,85H42C38.13,85 35,81.87 35,78Z" />
+        android:fillType="evenOdd"
+        android:pathData="M39,34C39,29.58 42.58,26 47,26H61L72,37V73C72,77.42 68.42,81 64,81H47C42.58,81 39,77.42 39,73Z M47,45H64V48.2H47Z M47,53H59V56.2H47Z M47,61H62V64.2H47Z" />
     <path
         android:fillColor="#000000"
-        android:pathData="M39,34C39,30.13 42.13,27 46,27H60L69,36V73C69,76.87 65.87,80 62,80H46C42.13,80 39,76.87 39,73Z" />
-    <path
-        android:fillColor="#000000"
-        android:pathData="M72,27C73.05,31.85 74.65,33.45 79.5,34.5C74.65,35.55 73.05,37.15 72,42C70.95,37.15 69.35,35.55 64.5,34.5C69.35,33.45 70.95,31.85 72,27Z" />
+        android:pathData="M77,20C78.25,26.25 80.25,28.25 86.5,29.5C80.25,30.75 78.25,32.75 77,39C75.75,32.75 73.75,30.75 67.5,29.5C73.75,28.25 75.75,26.25 77,20Z" />
 </vector>

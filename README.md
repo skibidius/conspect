@@ -28,4 +28,4 @@
 
 JDK 21, Android SDK 36.
 
-Скриншоты для RuStore (16:9): `docs/rustore/`.
+Материалы для RuStore (иконка, скриншоты 16:9 и тексты карточки): `docs/rustore/`.

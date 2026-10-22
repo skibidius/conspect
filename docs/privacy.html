@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Conspect — политика конфиденциальности</title>
+  <style>
+    :root { color-scheme: light dark; --bg:#f7f9f4; --fg:#1a201b; --muted:#5b655c; --card:#ffffff; --accent:#3f6348; }
+    @media (prefers-color-scheme: dark) { :root { --bg:#111510; --fg:#e4e9e1; --muted:#b4c0b5; --card:#1b211c; --accent:#a3d3ac; } }
+    body { margin:0; background:var(--bg); color:var(--fg); font-family: Roboto, "Helvetica Neue", Arial, sans-serif; line-height:1.65; }
+    main { max-width:760px; margin:0 auto; padding:48px 20px 72px; }
+    .brand { display:flex; gap:10px; align-items:center; color:var(--accent); font-weight:600; letter-spacing:.4px; }
+    .brand span:first-child { display:inline-grid; place-items:center; width:34px; height:34px; border-radius:11px; background:var(--accent); color:#fff; font-weight:700; }
+    h1 { font-size:34px; line-height:1.2; margin:24px 0 6px; letter-spacing:-.6px; }
+    h2 { font-size:20px; margin:32px 0 8px; }
+    p, li { color:var(--muted); }
+    .card { background:var(--card); border-radius:20px; padding:20px 22px; margin:22px 0; }
+    a { color:var(--accent); }
+    code { font-size:.92em; }
+    footer { color:var(--muted); font-size:13px; margin-top:40px; }
+  </style>
+</head>
+<body>
+<main>
+  <div class="brand"><span>C</span><span>CONSPECT</span></div>
+  <h1>Политика конфиденциальности</h1>
+  <p>Действует с 22 октября 2026 года. Приложение Conspect для Android.</p>
+
+  <div class="card">
+    <strong>Коротко.</strong> Conspect обрабатывает лекции на устройстве. Аудио не сохраняется и не отправляется в интернет. Текст в облако уходит только если вы сами включите режим DeepSeek и сохраните свой API-ключ.
+  </div>
+
+  <h2>1. Какие данные обрабатываются</h2>
+  <ul>
+    <li><strong>Микрофон.</strong> При нажатии «Начать запись» приложение получает доступ к микрофону и распознаёт речь офлайн с помощью модели Vosk. Аудиопоток обрабатывается в оперативной памяти и не записывается в файл.</li>
+    <li><strong>Конспекты и транскрипты.</strong> Сохраняются только в приватном хранилище приложения на телефоне. Разработчик не имеет к ним доступа.</li>
+    <li><strong>Модель распознавания.</strong> При первом запуске записи приложение скачивает русскую модель Vosk (~44 МБ) с <code>alphacephei.com</code>. Это технический файл, персональные данные при скачивании не передаются.</li>
+    <li><strong>DeepSeek (необязательно).</strong> Если вы включите этот режим и сохраните API-ключ, текст транскрипта будет отправлен в DeepSeek для структурирования конспекта. API-ключ хранится зашифрованным на устройстве через Android Keystore. Аудио в DeepSeek не отправляется.</li>
+  </ul>
+
+  <h2>2. Разрешения</h2>
+  <ul>
+    <li><strong>RECORD_AUDIO</strong> — запись и офлайн-распознавание лекции.</li>
+    <li><strong>INTERNET</strong> — загрузка модели Vosk и, только по вашему выбору, запросы к DeepSeek.</li>
+  </ul>
+  <p>Приложение не запрашивает геолокацию, контакты, камеру, доступ к файлам, SMS или журнал вызовов.</p>
+
+  <h2>3. Передача данных третьим лицам</h2>
+  <p>В локальном режиме данные не передаются. При включённом DeepSeek текст лекции передаётся в DeepSeek в соответствии с его политикой: <a href="https://www.deepseek.com/privacy" rel="noopener">deepseek.com/privacy</a>. Других получателей данных нет.</p>
+
+  <h2>4. Аналитика, реклама и аккаунты</h2>
+  <p>В приложении нет рекламы, трекеров, аналитики и обязательной регистрации. Аккаунт не создаётся.</p>
+
+  <h2>5. Хранение и удаление</h2>
+  <p>Конспекты, настройки и ключ DeepSeek хранятся локально. Удалить их можно очисткой данных приложения в настройках Android или удалением приложения. Модель Vosk также удаляется вместе с данными приложения; управлять ею можно в разделе «Настройки → Модели».</p>
+
+  <h2>6. Дети</h2>
+  <p>Приложение предназначено для школьников и студентов и не собирает персональные данные. Возрастной рейтинг — 6+.</p>
+
+  <h2>7. Изменения</h2>
+  <p>Актуальная версия политики всегда доступна на этой странице. При существенных изменениях дата вступления в силу будет обновлена.</p>
+
+  <h2>8. Контакты</h2>
+  <p>Разработчик: Conspect. Связь: <a href="https://github.com/skibidius/conspect/issues">github.com/skibidius/conspect/issues</a>.</p>
+
+  <footer>Conspect · Android · ru.konspekt.app</footer>
+</main>
+</body>
+</html>
