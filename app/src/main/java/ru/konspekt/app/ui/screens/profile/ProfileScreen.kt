@@ -28,6 +28,7 @@ import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FilterAlt
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.OpenInNew
@@ -93,6 +94,8 @@ import ru.konspekt.app.ui.components.DividerLine
 import ru.konspekt.app.ui.components.rememberHaptics
 import ru.konspekt.app.ui.theme.LocalKonspektDark
 import ru.konspekt.app.ui.theme.konspektColorScheme
+
+private const val DONATE_URL = "https://pay.cloudtips.ru/p/b5d67e09"
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
@@ -683,6 +686,60 @@ fun ProfileScreen(
                             color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f)
                         )
                     }
+                }
+            }
+
+            Spacer(Modifier.height(26.dp))
+            SectionLabel("Поддержка")
+            Spacer(Modifier.height(10.dp))
+            SettingsCard {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.tertiaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Favorite,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                            modifier = Modifier.size(19.dp)
+                        )
+                    }
+                    Spacer(Modifier.size(12.dp))
+                    Column {
+                        Text(
+                            text = "Поддержать Conspect",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Донат через CloudTips",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Spacer(Modifier.height(14.dp))
+                Button(
+                    onClick = {
+                        haptics.confirm()
+                        uriHandler.openUri(DONATE_URL)
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Favorite,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.size(8.dp))
+                    Text("Поддержать")
                 }
             }
 

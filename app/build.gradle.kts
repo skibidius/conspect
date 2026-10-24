@@ -22,8 +22,8 @@ android {
         applicationId = "ru.konspekt.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 10
-        versionName = (project.findProperty("versionName") as String?) ?: "1.6.0"
+        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 11
+        versionName = (project.findProperty("versionName") as String?) ?: "1.6.1"
 
         vectorDrawables.useSupportLibrary = true
         ndk {
