@@ -303,9 +303,9 @@ class DeepSeekClient {
               "keyTerms": ["string"],
               "skipped": [
                 {"time": "mm:ss или —", "quote": "string", "reason": "Не по теме|Организационное"}
-              ],
-              "latexSource": "полный LaTeX-документ или пустая строка"
+              ]
             }
+            Поле latexSource не включай: LaTeX-документ будет собран приложением.
         """.trimIndent()
     }
 }
