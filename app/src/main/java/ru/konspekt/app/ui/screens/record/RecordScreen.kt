@@ -1068,7 +1068,7 @@ private fun ProcessingScreen(
         "Убираем отступления",
         "Структурируем тезисы",
         "Верстаем формулы LaTeX",
-        "Готовим PDF-версию"
+        "Оформляем конспект"
     )
     val progress by androidx.compose.animation.core.animateFloatAsState(
         targetValue = step / steps.size.toFloat(),

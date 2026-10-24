@@ -29,19 +29,30 @@ object LocalLectureStructurer {
         val (onTopic, digressions) = clean.partition { line ->
             offTopicMarkers.none { marker -> line.lowercase(Locale("ru")).contains(marker) }
         }
-        val summarySource = onTopic.take(3).joinToString(" ")
-        val summary = if (summarySource.length > 240) {
-            summarySource.take(237).trimEnd() + "…"
+        val sentences = normalizeSentences(onTopic)
+        val summarySource = sentences.take(3).joinToString(" ")
+        val summary = if (summarySource.length > 280) {
+            summarySource.take(277).trimEnd() + "…"
         } else {
             summarySource.ifBlank { "Конспект по теме «$topic» готов. Основные тезисы собраны из лекции." }
         }
 
-        val definitions = onTopic.filter {
+        val definitions = sentences.filter {
             it.contains(" это ", ignoreCase = true) ||
                 it.contains("называется", ignoreCase = true) ||
                 it.contains("определяется", ignoreCase = true)
+        }.take(4)
+        val examples = sentences.filter {
+            !definitions.contains(it) && (
+                it.contains("например", ignoreCase = true) ||
+                    it.contains("пример", ignoreCase = true) ||
+                    it.contains("рассмотрим", ignoreCase = true)
+                )
         }.take(3)
-        val facts = onTopic.filterNot { it in definitions }.take(6)
+        val facts = sentences
+            .filterNot { it in definitions || it in examples }
+            .take(8)
+        val terms = deriveTerms(topic, onTopic)
 
         val sections = buildList {
             if (definitions.isNotEmpty()) {
@@ -49,8 +60,8 @@ object LocalLectureStructurer {
                     NoteSection(
                         title = "Определения",
                         kind = SectionKind.DEFINITION,
-                        body = definitions.joinToString(" "),
-                        bullets = definitions.map { it.trim() }
+                        body = definitions.joinToString("\n\n"),
+                        bullets = definitions
                     )
                 )
             }
@@ -59,8 +70,18 @@ object LocalLectureStructurer {
                     NoteSection(
                         title = "Основные тезисы",
                         kind = SectionKind.TEXT,
-                        body = facts.joinToString(" "),
-                        bullets = facts.map { it.trim() }
+                        body = facts.chunked(3).joinToString("\n\n") { it.joinToString(" ") },
+                        bullets = facts
+                    )
+                )
+            }
+            if (examples.isNotEmpty()) {
+                add(
+                    NoteSection(
+                        title = "Примеры",
+                        kind = SectionKind.EXAMPLE,
+                        body = examples.joinToString("\n\n"),
+                        bullets = examples
                     )
                 )
             }
@@ -69,15 +90,13 @@ object LocalLectureStructurer {
                     title = "Что запомнить",
                     kind = SectionKind.SUMMARY,
                     body = "",
-                    bullets = listOf(
-                        "Тема: $topic.",
-                        "Ключевые мысли собраны из ${onTopic.size} реплик преподавателя.",
-                        if (filterTangents) {
-                            "Отфильтровано отступлений: ${digressions.size}."
-                        } else {
-                            "Отступления сохранены в конспекте."
+                    bullets = buildList {
+                        add("Тема: $topic.")
+                        if (terms.isNotEmpty()) {
+                            add("Ключевые понятия: ${terms.take(4).joinToString(" · ")}.")
                         }
-                    )
+                        add("Основных тезисов: ${facts.size}.")
+                    }
                 )
             )
         }
@@ -103,11 +122,40 @@ object LocalLectureStructurer {
             timeLabel = timeLabel,
             durationMinutes = durationMinutes,
             sections = sections,
-            keyTerms = deriveTerms(topic, onTopic),
+            keyTerms = terms,
             skipped = skipped,
             latexSource = latex,
             wordCount = clean.sumOf { it.split(" ").size }
         )
+    }
+
+    private fun normalizeSentences(lines: List<String>): List<String> {
+        val seen = mutableSetOf<String>()
+        return lines
+            .flatMap { line ->
+                line.split(Regex("(?<=[.!?])\\s+"))
+                    .flatMap { part ->
+                        part.split(
+                            Regex(
+                                "(?i)(?=\\b(?:например|то есть|затем|теперь|далее|следовательно|итак|производная равна)\\b)"
+                            )
+                        )
+                    }
+            }
+            .map { raw ->
+                var text = raw.trim().replace(Regex("\\s+"), " ")
+                listOf("ну ", "вот ", "то есть ", "как бы ", "значит ", "так ").forEach { prefix ->
+                    if (text.startsWith(prefix, ignoreCase = true)) {
+                        text = text.substring(prefix.length)
+                    }
+                }
+                if (text.isBlank()) return@map ""
+                text = text.replaceFirstChar { it.titlecase(Locale("ru")) }
+                if (text.lastOrNull() !in listOf('.', '!', '?')) text = "$text."
+                text
+            }
+            .filter { it.length > 3 }
+            .filter { seen.add(it.lowercase(Locale("ru")).replace(Regex("[^\\p{L}\\p{N}]"), "")) }
     }
 
     private fun buildLatex(topic: String, summary: String, definitions: List<String>): String {
@@ -143,8 +191,15 @@ object LocalLectureStructurer {
 
     private fun deriveTerms(topic: String, lines: List<String>): List<String> {
         val text = "$topic ${lines.joinToString(" ")}"
+        val stopWords = setOf(
+            "сегодня", "например", "который", "которая", "которые", "будем",
+            "можно", "нужно", "равна", "равно", "через", "между", "после",
+            "перед", "теперь", "далее", "итак", "этого", "этот", "эта",
+            "эти", "также", "очень", "просто", "только", "когда", "потому",
+            "поэтому", "функция", "функции", "производная"
+        )
         val words = text.split(Regex("[^\\p{L}\\p{N}\\-]+"))
-            .filter { it.length in 5..16 }
+            .filter { it.length in 5..16 && it.lowercase(Locale("ru")) !in stopWords }
             .map { it.lowercase(Locale("ru")) }
         return words.groupingBy { it }.eachCount()
             .entries.sortedByDescending { it.value }

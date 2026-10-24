@@ -25,6 +25,7 @@ class SystemSpeechCapture(
 ) : SpeechCapture {
     private val main = Handler(Looper.getMainLooper())
     private var recognizer: SpeechRecognizer? = null
+    private var lastPartial = ""
 
     @Volatile
     private var running = false
@@ -36,8 +37,8 @@ class SystemSpeechCapture(
         putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
         putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
         putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-        putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1200L)
-        putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1200L)
+        putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2200L)
+        putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2200L)
         putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
     }
 
@@ -80,7 +81,10 @@ class SystemSpeechCapture(
             if (!running) return
             when (error) {
                 SpeechRecognizer.ERROR_NO_MATCH,
-                SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> restart()
+                SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> {
+                    commitPartial()
+                    restart()
+                }
                 SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS ->
                     fail("Нет доступа к микрофону")
                 SpeechRecognizer.ERROR_NETWORK,
@@ -95,14 +99,23 @@ class SystemSpeechCapture(
 
         override fun onResults(results: Bundle?) {
             if (!running) return
-            val text = results
+            val partial = lastPartial
+            lastPartial = ""
+            val finalText = results
                 ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 ?.firstOrNull()
                 .orEmpty()
                 .trim()
-            if (text.isNotBlank()) {
-                onFinal(text)
+            // Android's recognizer sometimes returns a shorter final phrase
+            // than the last partial, dropping words that were already shown.
+            val text = when {
+                finalText.isBlank() -> partial
+                partial.isBlank() -> finalText
+                partial.length > finalText.length &&
+                    partial.contains(finalText, ignoreCase = true) -> partial
+                else -> finalText
             }
+            if (text.isNotBlank()) onFinal(text)
             onPartial("")
             restart()
         }
@@ -114,7 +127,10 @@ class SystemSpeechCapture(
                 ?.firstOrNull()
                 .orEmpty()
                 .trim()
-            if (text.isNotBlank()) onPartial(text)
+            if (text.isNotBlank()) {
+                lastPartial = text
+                onPartial(text)
+            }
         }
 
         override fun onEvent(eventType: Int, params: Bundle?) = Unit
@@ -129,7 +145,17 @@ class SystemSpeechCapture(
         }, 250)
     }
 
+    private fun commitPartial() {
+        val text = lastPartial.trim()
+        lastPartial = ""
+        if (text.isNotBlank()) {
+            onFinal(text)
+            onPartial("")
+        }
+    }
+
     private fun fail(message: String) {
+        commitPartial()
         running = false
         onError(message)
         cleanup()
@@ -137,7 +163,15 @@ class SystemSpeechCapture(
 
     override fun stop() {
         running = false
-        main.post { cleanup() }
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            commitPartial()
+            cleanup()
+        } else {
+            main.post {
+                commitPartial()
+                cleanup()
+            }
+        }
     }
 
     private fun cleanup() {

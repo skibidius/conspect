@@ -234,7 +234,7 @@ private fun RecordHeroCard(
             Spacer(Modifier.height(4.dp))
             Text(
                 text = if (hasSubjects) {
-                    "Conspect прослушает лекцию и соберёт конспект с формулами и PDF."
+                    "Conspect прослушает лекцию и соберёт структурированный конспект с формулами LaTeX."
                 } else {
                     "Добавьте предмет, чтобы начать запись."
                 },

@@ -16,8 +16,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import android.net.Uri
 import android.speech.SpeechRecognizer
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AudioFile
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.CloudDownload
@@ -28,6 +32,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -60,6 +65,7 @@ fun NewRecordingSheet(
     filterTangents: Boolean,
     useSystemSpeech: Boolean,
     onFilterChange: (Boolean) -> Unit,
+    onImportAudio: (subjectId: String, topic: String, uri: Uri) -> Unit,
     onDismiss: () -> Unit,
     onStart: (subjectId: String, topic: String) -> Unit
 ) {
@@ -75,6 +81,14 @@ fun NewRecordingSheet(
     val systemAvailable = remember { SpeechRecognizer.isRecognitionAvailable(context) }
     val systemSpeech = useSystemSpeech && systemAvailable
     val haptics = rememberHaptics()
+    val audioPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null && selectedSubjectId.isNotBlank()) {
+            haptics.tap()
+            onImportAudio(selectedSubjectId, topic.trim(), uri)
+        }
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -249,6 +263,30 @@ fun NewRecordingSheet(
                 Spacer(Modifier.width(8.dp))
                 Text("Начать запись", style = MaterialTheme.typography.labelLarge)
             }
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = {
+                    haptics.tap()
+                    audioPicker.launch(arrayOf("audio/*"))
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                shape = RoundedCornerShape(16.dp),
+                enabled = selectedSubjectId.isNotBlank()
+            ) {
+                Icon(Icons.Rounded.AudioFile, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Импортировать аудио")
+            }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "m4a, mp3, wav, ogg — расшифровка офлайн",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
             Spacer(Modifier.height(6.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -263,7 +301,7 @@ fun NewRecordingSheet(
                 )
                 Spacer(Modifier.width(5.dp))
                 Text(
-                    text = "Структура, формулы и PDF — автоматически",
+                    text = "Структура и формулы LaTeX — автоматически",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
                     textAlign = TextAlign.Center

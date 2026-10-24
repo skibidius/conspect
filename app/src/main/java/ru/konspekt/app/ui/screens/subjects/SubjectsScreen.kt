@@ -283,6 +283,7 @@ private fun SubjectGridCard(
         modifier = Modifier
             .fillMaxWidth()
             .height(206.dp)
+            .clip(RoundedCornerShape(24.dp))
             .combinedClickable(
                 onClick = {
                     haptics.tap()

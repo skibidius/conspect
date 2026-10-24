@@ -2,6 +2,8 @@ package ru.konspekt.app.data
 
 import android.app.Application
 import ru.konspekt.app.BuildConfig
+import ru.konspekt.app.recording.VoskModel
+import ru.konspekt.app.recording.VoskModelManager
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -102,7 +104,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val time = SimpleDateFormat("HH:mm", Locale("ru")).format(now)
         val curated = if (demo) curatedNoteFor(subject) else null
         val resolvedTopic = topic.ifBlank {
-            transcript.firstOrNull { it.isNotBlank() }?.trim()?.take(64)?.trimEnd()
+            transcript.firstOrNull { it.isNotBlank() }
+                ?.trim()
+                ?.split(Regex("\\s+"))
+                ?.take(5)
+                ?.joinToString(" ")
+                ?.replaceFirstChar { it.titlecase(Locale("ru")) }
+                ?.takeIf { it.isNotBlank() }
                 ?: "Новая лекция"
         }
 
@@ -175,6 +183,32 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private fun saveGeneratedNote(note: Note) {
         notes = (listOf(note) + notes).sortedByDescending { it.createdAt }
         persistLocalNotes()
+    }
+
+    fun exportBackupJson(): String = BackupManager.toJson(
+        AppBackup(
+            settings = settings,
+            subjects = subjects,
+            notes = notes,
+            trash = trash,
+            modelId = VoskModelManager.selected(getApplication()).id
+        )
+    )
+
+    fun importBackupJson(raw: String): Boolean {
+        val backup = BackupManager.fromJson(raw) ?: return false
+        settings = backup.settings
+        subjects = backup.subjects
+        notes = backup.notes.sortedByDescending { it.createdAt }
+        trash = backup.trash
+        repository.saveSettings(settings)
+        repository.saveSubjects(subjects)
+        repository.saveNotes(notes)
+        repository.saveTrash(trash)
+        VoskModel.entries.firstOrNull { it.id == backup.modelId }?.let { model ->
+            VoskModelManager.select(getApplication(), model)
+        }
+        return true
     }
 
     fun deleteNote(id: String) {

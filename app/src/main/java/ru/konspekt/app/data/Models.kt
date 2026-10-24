@@ -147,7 +147,7 @@ data class UserSettings(
     val dynamicColor: Boolean = true,
     val filterTangents: Boolean = true,
     val aiMode: AiMode = AiMode.LOCAL,
-    val speechEngine: SpeechEngine = SpeechEngine.VOSK
+    val speechEngine: SpeechEngine = SpeechEngine.SYSTEM
 )
 
 data class NoteGenerationResult(

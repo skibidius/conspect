@@ -36,7 +36,7 @@ fun KonspektLogo(
         modifier = modifier
             .size(size)
             .clip(RoundedCornerShape(size * 0.3f))
-            .background(Color(0xFFE7EBE4)),
+            .background(Color(0xFF44584A)),
         contentAlignment = Alignment.Center
     ) {
         Image(

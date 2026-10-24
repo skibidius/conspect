@@ -393,11 +393,11 @@ fun NoteScreen(
                                 color = MaterialTheme.colorScheme.onPrimary
                             )
                             Spacer(Modifier.size(8.dp))
-                            Text("Готовим PDF…")
+                            Text("Готовим файл…")
                         } else {
                             Icon(Icons.Rounded.PictureAsPdf, contentDescription = null, modifier = Modifier.size(19.dp))
                             Spacer(Modifier.size(8.dp))
-                            Text("Скачать PDF")
+                            Text("Экспорт в PDF")
                         }
                     }
                     OutlinedButton(

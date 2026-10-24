@@ -67,6 +67,7 @@ import ru.konspekt.app.data.SpeechEngine
 import ru.konspekt.app.ui.components.NewRecordingSheet
 import ru.konspekt.app.ui.components.rememberHaptics
 import ru.konspekt.app.ui.screens.home.HomeScreen
+import ru.konspekt.app.ui.screens.importaudio.ImportAudioScreen
 import ru.konspekt.app.ui.screens.library.LibraryScreen
 import ru.konspekt.app.ui.screens.note.NoteScreen
 import ru.konspekt.app.ui.screens.profile.ProfileScreen
@@ -80,6 +81,12 @@ private data class BottomDestination(
     val route: String,
     val label: String,
     val icon: ImageVector
+)
+
+private data class ImportRequest(
+    val subjectId: String,
+    val topic: String,
+    val uri: Uri
 )
 
 private val bottomDestinations = listOf(
@@ -99,6 +106,7 @@ fun KonspektApp(viewModel: AppViewModel) {
     val isRoot = currentRoute == null || currentRoute in bottomDestinations.map { it.route }
 
     var showRecordingSheet by remember { mutableStateOf(false) }
+    var importRequest by remember { mutableStateOf<ImportRequest?>(null) }
     var preselectedSubject by remember { mutableStateOf<String?>(null) }
 
     fun openRecording(subjectId: String? = null) {
@@ -110,6 +118,17 @@ fun KonspektApp(viewModel: AppViewModel) {
 
     fun navigateTab(route: String) {
         haptics.tap()
+        if (route == "home") {
+            // Always return to the real home destination. Relying only on
+            // restoreState could leave the Subjects tab visually selected.
+            if (!navController.popBackStack("home", inclusive = false)) {
+                navController.navigate("home") {
+                    launchSingleTop = true
+                    restoreState = true
+                }
+            }
+            return
+        }
         navController.navigate(route) {
             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
             launchSingleTop = true
@@ -132,6 +151,39 @@ fun KonspektApp(viewModel: AppViewModel) {
             if (result == SnackbarResult.ActionPerformed) {
                 viewModel.restoreNote(id)
             }
+        }
+    }
+
+    val activeImport = importRequest
+    if (activeImport != null) {
+        val importSubject = viewModel.subject(activeImport.subjectId)
+        if (importSubject != null) {
+            ImportAudioScreen(
+                subject = importSubject,
+                topic = activeImport.topic,
+                uri = activeImport.uri,
+                onClose = { importRequest = null },
+                onFinish = { lines, duration ->
+                    viewModel.generateNote(
+                        subjectId = importSubject.id,
+                        topic = activeImport.topic,
+                        transcript = lines,
+                        // AudioFileTranscriber returns seconds, while notes store minutes.
+                        durationMinutes = ((duration + 59) / 60).coerceAtLeast(1),
+                        demo = false
+                    )
+                },
+                onCompleted = { result ->
+                    importRequest = null
+                    navController.navigate("note/${result.noteId}") {
+                        launchSingleTop = true
+                    }
+                    result.warning?.let(::message)
+                }
+            )
+            return
+        } else {
+            importRequest = null
         }
     }
 
@@ -300,6 +352,9 @@ fun KonspektApp(viewModel: AppViewModel) {
                     hasDeepSeekKey = viewModel.hasDeepSeekKey,
                     onSaveDeepSeekKey = viewModel::saveDeepSeekKey,
                     onClearDeepSeekKey = viewModel::clearDeepSeekKey,
+                    onExportBackup = viewModel::exportBackupJson,
+                    onImportBackup = viewModel::importBackupJson,
+                    onMessage = ::message,
                     onBack = { navController.popBackStack() },
                     onSettingsChange = viewModel::updateSettings
                 )
@@ -413,6 +468,10 @@ fun KonspektApp(viewModel: AppViewModel) {
             useSystemSpeech = viewModel.settings.speechEngine == SpeechEngine.SYSTEM,
             onFilterChange = { enabled ->
                 viewModel.updateSettings { it.copy(filterTangents = enabled) }
+            },
+            onImportAudio = { subjectId, topic, uri ->
+                showRecordingSheet = false
+                importRequest = ImportRequest(subjectId, topic, uri)
             },
             onDismiss = { showRecordingSheet = false },
             onStart = { subjectId, topic ->

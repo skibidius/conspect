@@ -157,6 +157,7 @@ fun NoteRow(
     Surface(
         modifier = modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
             .combinedClickable(
                 onClick = {
                     haptics.tap()

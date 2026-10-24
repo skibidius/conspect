@@ -33,10 +33,27 @@ class AppRepository(context: Context) {
                     else -> AiMode.LOCAL
                 },
                 speechEngine = when (json.optString("speechEngine")) {
-                    "SYSTEM" -> SpeechEngine.SYSTEM
-                    else -> SpeechEngine.VOSK
+                    "VOSK" -> SpeechEngine.VOSK
+                    else -> SpeechEngine.SYSTEM
                 }
-            )
+            ).let { settings ->
+                var engine = settings.speechEngine
+                // One-time migration: system recognition becomes the default
+                // for existing installs that never explicitly chose an engine.
+                if (!prefs.getBoolean(KEY_ENGINE_MIGRATED, false)) {
+                    engine = SpeechEngine.SYSTEM
+                    prefs.edit().putBoolean(KEY_ENGINE_MIGRATED, true).apply()
+                    if (engine != settings.speechEngine) {
+                        prefs.edit()
+                            .putString(
+                                KEY_SETTINGS,
+                                gson.toJson(settings.copy(speechEngine = engine))
+                            )
+                            .apply()
+                    }
+                }
+                settings.copy(speechEngine = engine)
+            }
         }.getOrDefault(UserSettings())
     }
 
@@ -85,5 +102,6 @@ class AppRepository(context: Context) {
         const val KEY_NOTES = "notes"
         const val KEY_SUBJECTS = "subjects"
         const val KEY_TRASH = "trash"
+        const val KEY_ENGINE_MIGRATED = "speech_engine_migrated_v2"
     }
 }

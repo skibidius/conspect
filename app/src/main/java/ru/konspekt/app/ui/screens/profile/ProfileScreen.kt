@@ -1,6 +1,8 @@
 package ru.konspekt.app.ui.screens.profile
 
 import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import android.speech.SpeechRecognizer
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -33,6 +35,7 @@ import androidx.compose.material.icons.rounded.FilterAlt
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.SmartToy
 import androidx.compose.material.icons.rounded.Key
@@ -107,6 +110,9 @@ fun ProfileScreen(
     hasDeepSeekKey: Boolean,
     onSaveDeepSeekKey: (String) -> Unit,
     onClearDeepSeekKey: () -> Unit,
+    onExportBackup: () -> String,
+    onImportBackup: (String) -> Boolean,
+    onMessage: (String) -> Unit,
     onBack: () -> Unit,
     onSettingsChange: ((UserSettings) -> UserSettings) -> Unit,
     modifier: Modifier = Modifier
@@ -126,6 +132,34 @@ fun ProfileScreen(
     val haptics = rememberHaptics()
     val uriHandler = LocalUriHandler.current
     val systemSpeechAvailable = remember { SpeechRecognizer.isRecognitionAvailable(context) }
+    var pendingImport by remember { mutableStateOf<String?>(null) }
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        runCatching {
+            context.contentResolver.openOutputStream(uri)?.use { output ->
+                output.write(onExportBackup().toByteArray(Charsets.UTF_8))
+            } ?: error("Не удалось открыть файл")
+        }.onSuccess {
+            onMessage("Резервная копия сохранена")
+        }.onFailure {
+            onMessage("Не удалось сохранить копию")
+        }
+    }
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val raw = runCatching {
+            context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+        }.getOrNull()
+        if (raw.isNullOrBlank()) {
+            onMessage("Не удалось прочитать файл")
+        } else {
+            pendingImport = raw
+        }
+    }
     val animatedModelProgress by animateFloatAsState(
         targetValue = modelProgress,
         animationSpec = tween(300),
@@ -675,16 +709,63 @@ fun ProfileScreen(
                     Spacer(Modifier.size(13.dp))
                     Column {
                         Text(
-                            text = "Локально по умолчанию",
+                            text = "Как обрабатывается речь",
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                         Spacer(Modifier.height(3.dp))
                         Text(
-                            text = "По умолчанию аудио и текст остаются на телефоне. В режиме DeepSeek отправляется только текст лекции.",
+                            text = "Vosk работает офлайн. Системное распознавание может обрабатываться сервисом Google. Аудио не сохраняется. В режиме DeepSeek отправляется только текст лекции.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f)
                         )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(26.dp))
+            SectionLabel("Данные")
+            Spacer(Modifier.height(10.dp))
+            SettingsCard {
+                SettingHeader(
+                    icon = Icons.Rounded.Save,
+                    title = "Резервная копия",
+                    subtitle = "Предметы, конспекты и настройки"
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = "API-ключ и скачанные модели не включаются в файл.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(14.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            haptics.tap()
+                            exportLauncher.launch("conspect-backup.json")
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(46.dp),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Text("Экспорт")
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            haptics.tap()
+                            importLauncher.launch(arrayOf("application/json", "text/plain"))
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(46.dp),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Text("Импорт")
                     }
                 }
             }
@@ -766,6 +847,38 @@ fun ProfileScreen(
                 }
             },
             onDismiss = { showModelPicker = false }
+        )
+    }
+
+    pendingImport?.let { raw ->
+        AlertDialog(
+            onDismissRequest = { pendingImport = null },
+            shape = RoundedCornerShape(28.dp),
+            title = { Text("Импортировать данные?") },
+            text = { Text("Текущие предметы, конспекты и настройки будут заменены данными из файла.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    haptics.confirm()
+                    if (onImportBackup(raw)) {
+                        selectedModel = VoskModelManager.selected(context)
+                        modelReady = VoskModelManager.isReady(context, selectedModel)
+                        onMessage("Данные импортированы")
+                    } else {
+                        onMessage("Не удалось прочитать резервную копию")
+                    }
+                    pendingImport = null
+                }) {
+                    Text("Импортировать")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    haptics.tap()
+                    pendingImport = null
+                }) {
+                    Text("Отмена")
+                }
+            }
         )
     }
 }
