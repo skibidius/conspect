@@ -1,6 +1,7 @@
 package ru.konspekt.app.ui.screens.importaudio
 
 import android.net.Uri
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -44,6 +45,8 @@ import androidx.compose.ui.unit.dp
 import ru.konspekt.app.data.NoteGenerationResult
 import ru.konspekt.app.data.Subject
 import ru.konspekt.app.recording.AudioFileTranscriber
+import ru.konspekt.app.recording.AudioTranscriptionProgress
+import ru.konspekt.app.recording.AudioTranscriptionStage
 import ru.konspekt.app.ui.components.KonspektLogo
 import ru.konspekt.app.ui.components.rememberHaptics
 
@@ -60,8 +63,15 @@ fun ImportAudioScreen(
 ) {
     val context = LocalContext.current
     val haptics = rememberHaptics()
-    var progress by remember { mutableFloatStateOf(0f) }
-    var status by remember { mutableStateOf("Подготавливаем аудио…") }
+    var update by remember {
+        mutableStateOf(
+            AudioTranscriptionProgress(
+                stage = AudioTranscriptionStage.MODEL,
+                fraction = 0f
+            )
+        )
+    }
+
     var error by remember { mutableStateOf<String?>(null) }
     var started by remember { mutableStateOf(false) }
 
@@ -72,8 +82,7 @@ fun ImportAudioScreen(
             AudioFileTranscriber.transcribe(
                 context = context,
                 uri = uri,
-                onStatus = { status = it },
-                onProgress = { progress = it }
+                onProgress = { update = it }
             )
         }.getOrElse { throwable ->
             error = throwable.message ?: "Не удалось прочитать аудио"
@@ -84,8 +93,13 @@ fun ImportAudioScreen(
             error = "Речь не распознана. Попробуйте файл с более чистым звуком."
             return@LaunchedEffect
         }
-        progress = 1f
-        status = "Собираем конспект…"
+        update = update.copy(
+            stage = AudioTranscriptionStage.FINALIZING,
+            fraction = 0.995f,
+            stageFraction = 1f,
+            processedSeconds = transcription.durationSeconds,
+            totalSeconds = transcription.durationSeconds
+        )
         val result = runCatching {
             onFinish(transcription.lines, transcription.durationSeconds)
         }.getOrElse {
@@ -95,9 +109,44 @@ fun ImportAudioScreen(
         if (result != null) onCompleted(result)
     }
 
+    val progress = update.fraction.coerceIn(0f, 1f)
+    val stageTitle = when (update.stage) {
+        AudioTranscriptionStage.MODEL -> "Загружаем модель GigaAM"
+        AudioTranscriptionStage.PREPARING -> "Подготавливаем аудио"
+        AudioTranscriptionStage.RECOGNIZING -> "Расшифровываем лекцию"
+        AudioTranscriptionStage.FINALIZING -> "Собираем конспект"
+    }
+    val detail = when (update.stage) {
+        AudioTranscriptionStage.MODEL ->
+            if (update.stageFraction >= 1f) {
+                "Модель готова, загружаем её в память…"
+            } else {
+                "Скачано ${(update.stageFraction * 100).toInt()}% модели"
+            }
+        AudioTranscriptionStage.PREPARING ->
+            if (update.totalSeconds > 0) {
+                "Длительность: ${formatDuration(update.totalSeconds)}"
+            } else {
+                "Читаем аудиодорожку…"
+            }
+        AudioTranscriptionStage.RECOGNIZING -> {
+            val processed = formatDuration(update.processedSeconds)
+            val total = if (update.totalSeconds > 0) {
+                " из ${formatDuration(update.totalSeconds)}"
+            } else {
+                ""
+            }
+            val eta = update.etaSeconds?.let { " · осталось ~${formatEta(it)}" }.orEmpty()
+            "Обработано $processed$total$eta"
+        }
+        AudioTranscriptionStage.FINALIZING ->
+            "Структурируем тезисы и сохраняем конспект"
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
             .navigationBarsPadding()
     ) {
         TopAppBar(
@@ -157,12 +206,30 @@ fun ImportAudioScreen(
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(Modifier.size(8.dp))
-                        Text(
-                            text = if (error == null) "Офлайн-распознавание" else "Ошибка",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = if (error == null) MaterialTheme.colorScheme.onSurface
-                            else MaterialTheme.colorScheme.error
-                        )
+                        Column {
+                            Text(
+                                text = if (error == null) "Офлайн-распознавание" else "Ошибка",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = if (error == null) MaterialTheme.colorScheme.onSurface
+                                else MaterialTheme.colorScheme.error
+                            )
+                            if (error == null) {
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    text = stageTitle,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        Spacer(Modifier.weight(1f))
+                        if (error == null) {
+                            Text(
+                                text = "${(progress * 100).toInt()}%",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
                     Spacer(Modifier.height(14.dp))
                     if (error == null) {
@@ -170,20 +237,22 @@ fun ImportAudioScreen(
                             progress = { progress },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(10.dp)
+                                .height(12.dp)
                                 .clip(CircleShape),
                             color = MaterialTheme.colorScheme.primary,
-                            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            gapSize = 0.dp,
+                            drawStopIndicator = {}
                         )
                         Spacer(Modifier.height(10.dp))
                         Text(
-                            text = "$status · ${(progress * 100).toInt()}%",
+                            text = detail,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Spacer(Modifier.height(12.dp))
+                        Spacer(Modifier.height(6.dp))
                         Text(
-                            text = "Обработка идёт на телефоне. Для длинной лекции это может занять несколько минут.",
+                            text = "Обработка идёт на телефоне. Прогресс рассчитан по длительности аудио.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -218,5 +287,23 @@ fun ImportAudioScreen(
                 textAlign = TextAlign.Center
             )
         }
+    }
+}
+
+private fun formatDuration(seconds: Int): String {
+    val safe = seconds.coerceAtLeast(0)
+    return if (safe >= 3600) {
+        "%d:%02d:%02d".format(safe / 3600, (safe % 3600) / 60, safe % 60)
+    } else {
+        "%d:%02d".format(safe / 60, safe % 60)
+    }
+}
+
+private fun formatEta(seconds: Int): String {
+    val safe = seconds.coerceAtLeast(0)
+    return when {
+        safe >= 3600 -> "${safe / 3600} ч ${(safe % 3600 + 59) / 60} мин"
+        safe >= 60 -> "${(safe + 59) / 60} мин"
+        else -> "меньше минуты"
     }
 }

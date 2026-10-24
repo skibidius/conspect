@@ -8,13 +8,33 @@ import android.media.MediaFormat
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
+import com.k2fsa.sherpa.onnx.OfflineRecognizer
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import com.k2fsa.sherpa.onnx.OfflineRecognizer
+
+enum class AudioTranscriptionStage {
+    MODEL,
+    PREPARING,
+    RECOGNIZING,
+    FINALIZING
+}
+
+data class AudioTranscriptionProgress(
+    val stage: AudioTranscriptionStage,
+    val fraction: Float,
+    val stageFraction: Float = 0f,
+    val processedSeconds: Int = 0,
+    val totalSeconds: Int = 0,
+    val etaSeconds: Int? = null,
+    val chunksDone: Int = 0,
+    val chunksTotal: Int = 0
+)
 
 data class AudioTranscription(
     val lines: List<String>,
@@ -24,28 +44,56 @@ data class AudioTranscription(
 /**
  * Decodes any audio file supported by Android's MediaCodec into 16 kHz mono
  * PCM and transcribes it with the offline GigaAM (sherpa-onnx) model.
+ *
+ * The decoder and recognizer both run on a background dispatcher. Progress is
+ * based on the amount of audio actually processed, not on timer ticks.
  */
 object AudioFileTranscriber {
     suspend fun transcribe(
         context: Context,
         uri: Uri,
-        onStatus: (String) -> Unit,
-        onProgress: (Float) -> Unit
+        onProgress: (AudioTranscriptionProgress) -> Unit
     ): AudioTranscription = withContext(Dispatchers.IO) {
         val main = Handler(Looper.getMainLooper())
-        fun status(text: String) = main.post { onStatus(text) }
-        fun progress(value: Float) = main.post { onProgress(value.coerceIn(0f, 1f)) }
+        var lastEmitAt = 0L
 
-        status("Загружаем офлайн-модель GigaAM…")
+        fun emit(update: AudioTranscriptionProgress) {
+            main.post { onProgress(update) }
+        }
+
+        fun emitThrottled(update: AudioTranscriptionProgress, force: Boolean = false) {
+            val now = SystemClock.elapsedRealtime()
+            if (force || now - lastEmitAt >= 250) {
+                lastEmitAt = now
+                emit(update)
+            }
+        }
+
+        emit(
+            AudioTranscriptionProgress(
+                stage = AudioTranscriptionStage.MODEL,
+                fraction = 0f
+            )
+        )
         val downloaded = SherpaModelManager.ensureDownloaded(context) { p ->
-            progress(p * 0.3f)
+            emit(
+                AudioTranscriptionProgress(
+                    stage = AudioTranscriptionStage.MODEL,
+                    fraction = p * 0.02f,
+                    stageFraction = p
+                )
+            )
         }
         if (!downloaded) error("Не удалось скачать модель распознавания")
         val recognizer = SherpaModelManager.ensureRecognizer(context)
             ?: error("Не удалось загрузить модель распознавания")
-
-        status("Распознаём аудио…")
-        progress(0.3f)
+        emit(
+            AudioTranscriptionProgress(
+                stage = AudioTranscriptionStage.PREPARING,
+                fraction = 0.02f,
+                stageFraction = 1f
+            )
+        )
 
         val extractor = MediaExtractor()
         var codec: MediaCodec? = null
@@ -68,6 +116,16 @@ object AudioFileTranscriber {
             } else {
                 0L
             }
+            val totalSeconds = if (durationUs > 0L) {
+                (durationUs / 1_000_000L).toInt().coerceAtLeast(1)
+            } else {
+                0
+            }
+            val totalChunks = if (totalSeconds > 0) {
+                ceil(totalSeconds.toDouble() / CHUNK_SECONDS).toInt()
+            } else {
+                0
+            }
 
             runCatching {
                 inputFormat.setInteger(MediaFormat.KEY_PCM_ENCODING, AudioFormat.ENCODING_PCM_16BIT)
@@ -79,8 +137,10 @@ object AudioFileTranscriber {
             decoder.start()
 
             val rec: OfflineRecognizer = recognizer
-            val pending = FloatArray(SAMPLE_RATE * 20)
+            val pending = FloatArray(SAMPLE_RATE * CHUNK_SECONDS)
             var pendingLength = 0
+            var decodedSamples = 0L
+            var chunksDone = 0
 
             val bufferInfo = MediaCodec.BufferInfo()
             var inputDone = false
@@ -98,8 +158,58 @@ object AudioFileTranscriber {
             var pcmEncoding = AudioFormat.ENCODING_PCM_16BIT
             val resampler = PcmResampler(SAMPLE_RATE)
             val lines = mutableListOf<String>()
-            var lastProgress = 0f
-            var decodedSamples = 0L
+            val recognitionStartedAt = SystemClock.elapsedRealtime()
+
+            fun publishRecognition(force: Boolean = false) {
+                val processed = (decodedSamples / SAMPLE_RATE)
+                    .toInt()
+                    .coerceAtLeast(0)
+                    .let { if (totalSeconds > 0) it.coerceAtMost(totalSeconds) else it }
+                val stageFraction = if (totalSeconds > 0) {
+                    (processed.toFloat() / totalSeconds).coerceIn(0f, 1f)
+                } else {
+                    0f
+                }
+                val elapsedSeconds = ((SystemClock.elapsedRealtime() - recognitionStartedAt) / 1000f)
+                    .coerceAtLeast(0f)
+                val eta = if (
+                    totalSeconds > 0 &&
+                    processed >= 15 &&
+                    elapsedSeconds >= 3f
+                ) {
+                    val speed = processed / elapsedSeconds
+                    if (speed > 0.05f) {
+                        ((totalSeconds - processed) / speed).roundToInt().coerceAtLeast(0)
+                    } else {
+                        null
+                    }
+                } else {
+                    null
+                }
+                emitThrottled(
+                    AudioTranscriptionProgress(
+                        stage = AudioTranscriptionStage.RECOGNIZING,
+                        fraction = 0.02f + stageFraction * 0.97f,
+                        stageFraction = stageFraction,
+                        processedSeconds = processed,
+                        totalSeconds = totalSeconds,
+                        etaSeconds = eta,
+                        chunksDone = chunksDone,
+                        chunksTotal = totalChunks
+                    ),
+                    force = force
+                )
+            }
+
+            emit(
+                AudioTranscriptionProgress(
+                    stage = AudioTranscriptionStage.PREPARING,
+                    fraction = 0.02f,
+                    stageFraction = 1f,
+                    totalSeconds = totalSeconds,
+                    chunksTotal = totalChunks
+                )
+            )
 
             while (!outputDone) {
                 if (!inputDone) {
@@ -136,7 +246,9 @@ object AudioFileTranscriber {
                         }
                         resampler.reset(sampleRate, channels)
                     }
+
                     MediaCodec.INFO_TRY_AGAIN_LATER -> Unit
+
                     else -> if (outputIndex >= 0) {
                         val outputBuffer = decoder.getOutputBuffer(outputIndex)
                         if (bufferInfo.size > 0 && outputBuffer != null) {
@@ -149,35 +261,25 @@ object AudioFileTranscriber {
                                 channels = channels,
                                 pcmEncoding = pcmEncoding
                             )
-                            if (pcm.isNotEmpty()) {
-                                decodedSamples += pcm.size / 2L
+                            if (pcm.length > 0) {
+                                decodedSamples += pcm.length
                                 var offset = 0
-                                while (offset + 1 < pcm.size) {
-                                    val sample = ((pcm[offset + 1].toInt() shl 8) or
-                                        (pcm[offset].toInt() and 0xff)).toShort()
-                                    pending[pendingLength++] = sample / 32768.0f
-                                    offset += 2
+                                while (offset < pcm.length) {
+                                    pending[pendingLength++] = pcm.samples[offset] / 32768.0f
+                                    offset += 1
                                     if (pendingLength == pending.size) {
-                                        recognizeChunk(rec, pending, pendingLength).let { text ->
-                                            if (text.isNotBlank()) lines.add(text)
-                                        }
+                                        val text = recognizeChunk(rec, pending, pendingLength)
+                                        if (text.isNotBlank()) lines.add(text)
                                         pendingLength = 0
+                                        chunksDone += 1
                                     }
                                 }
+                                publishRecognition()
                             }
                         }
                         decoder.releaseOutputBuffer(outputIndex, false)
                         if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
                             outputDone = true
-                        }
-                        if (durationUs > 0) {
-                            val p = (bufferInfo.presentationTimeUs.toFloat() / durationUs.toFloat())
-                                .coerceIn(0f, 1f)
-                            val scaled = 0.3f + p * 0.65f
-                            if (scaled - lastProgress >= 0.01f) {
-                                lastProgress = scaled
-                                progress(scaled)
-                            }
                         }
                     }
                 }
@@ -186,13 +288,24 @@ object AudioFileTranscriber {
             if (pendingLength > 0) {
                 val tail = recognizeChunk(rec, pending, pendingLength)
                 if (tail.isNotBlank()) lines.add(tail)
+                chunksDone += 1
             }
-            val duration = if (durationUs > 0) {
-                (durationUs / 1_000_000L).toInt().coerceAtLeast(1)
+            val duration = if (totalSeconds > 0) {
+                totalSeconds
             } else {
                 (decodedSamples / SAMPLE_RATE).toInt().coerceAtLeast(1)
             }
-            progress(1f)
+            emit(
+                AudioTranscriptionProgress(
+                    stage = AudioTranscriptionStage.FINALIZING,
+                    fraction = 0.99f,
+                    stageFraction = 1f,
+                    processedSeconds = duration,
+                    totalSeconds = duration,
+                    chunksDone = chunksDone,
+                    chunksTotal = if (totalChunks > 0) totalChunks else chunksDone
+                )
+            )
             AudioTranscription(lines = lines.distinct(), durationSeconds = duration)
         } finally {
             runCatching { codec?.stop() }
@@ -208,7 +321,8 @@ object AudioFileTranscriber {
     ): String {
         val stream = recognizer.createStream()
         return try {
-            stream.acceptWaveform(samples.copyOf(length), SAMPLE_RATE)
+            val input = if (length == samples.size) samples else samples.copyOf(length)
+            stream.acceptWaveform(input, SAMPLE_RATE)
             recognizer.decode(stream)
             recognizer.getResult(stream).text.trim()
         } finally {
@@ -233,7 +347,7 @@ object AudioFileTranscriber {
             sampleRate: Int,
             channels: Int,
             pcmEncoding: Int
-        ): ByteArray {
+        ): PcmChunk {
             if (sampleRate != currentRate || channels != currentChannels) {
                 reset(sampleRate, channels)
             }
@@ -241,17 +355,18 @@ object AudioFileTranscriber {
                 AudioFormat.ENCODING_PCM_FLOAT -> size / 4 / currentChannels
                 else -> size / 2 / currentChannels
             }
-            if (frames <= 0) return ByteArray(0)
+            if (frames <= 0) return PcmChunk.EMPTY
 
-            val mono = DoubleArray(frames)
+            val mono = FloatArray(frames)
             buffer.order(ByteOrder.LITTLE_ENDIAN)
             if (pcmEncoding == AudioFormat.ENCODING_PCM_FLOAT) {
                 val floats = FloatArray(frames * currentChannels)
                 buffer.asFloatBuffer().get(floats)
                 for (frame in 0 until frames) {
-                    var sum = 0.0
+                    var sum = 0f
+                    val base = frame * currentChannels
                     for (ch in 0 until currentChannels) {
-                        sum += floats[frame * currentChannels + ch]
+                        sum += floats[base + ch]
                     }
                     mono[frame] = sum / currentChannels
                 }
@@ -259,16 +374,17 @@ object AudioFileTranscriber {
                 val shorts = ShortArray(frames * currentChannels)
                 buffer.asShortBuffer().get(shorts)
                 for (frame in 0 until frames) {
-                    var sum = 0.0
+                    var sum = 0f
+                    val base = frame * currentChannels
                     for (ch in 0 until currentChannels) {
-                        sum += shorts[frame * currentChannels + ch].toDouble()
+                        sum += shorts[base + ch].toFloat()
                     }
                     mono[frame] = sum / currentChannels
                 }
             }
 
             val ratio = currentRate.toDouble() / targetRate.toDouble()
-            val estimated = max(0, ((frames - sourcePosition) / ratio).toInt() + 1)
+            val estimated = ((frames / ratio) + 8).toInt().coerceAtLeast(1)
             val out = ShortArray(estimated)
             var outCount = 0
             while (sourcePosition + 1 < frames && outCount < out.size) {
@@ -279,13 +395,17 @@ object AudioFileTranscriber {
                 sourcePosition += ratio
             }
             sourcePosition = (sourcePosition - frames).coerceAtLeast(0.0)
-            if (outCount == 0) return ByteArray(0)
-            return ByteBuffer.allocate(outCount * 2)
-                .order(ByteOrder.LITTLE_ENDIAN)
-                .also { it.asShortBuffer().put(out, 0, outCount) }
-                .array()
+            if (outCount == 0) return PcmChunk.EMPTY
+            return PcmChunk(out, outCount)
+        }
+    }
+
+    private data class PcmChunk(val samples: ShortArray, val length: Int) {
+        companion object {
+            val EMPTY = PcmChunk(ShortArray(0), 0)
         }
     }
 
     private const val SAMPLE_RATE = 16_000
+    private const val CHUNK_SECONDS = 30
 }

@@ -14,3 +14,10 @@ node_modules/
 dist/
 .kotlin/
 Konspekt-*.apk
+
+# Local audio used for import testing
+*.webm
+*.wav
+*.mp3
+*.m4a
+*.ogg

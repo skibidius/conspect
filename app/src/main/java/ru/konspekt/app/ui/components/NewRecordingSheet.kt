@@ -266,7 +266,15 @@ fun NewRecordingSheet(
             OutlinedButton(
                 onClick = {
                     haptics.tap()
-                    audioPicker.launch(arrayOf("audio/*"))
+                    audioPicker.launch(
+                        arrayOf(
+                            "audio/*",
+                            "audio/webm",
+                            "video/webm",
+                            "audio/x-matroska",
+                            "video/x-matroska"
+                        )
+                    )
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -280,7 +288,7 @@ fun NewRecordingSheet(
             }
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "m4a, mp3, wav, ogg — расшифровка офлайн",
+                text = "m4a, mp3, wav, ogg, webm — расшифровка офлайн",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
                 textAlign = TextAlign.Center,

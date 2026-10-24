@@ -27,10 +27,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FilterAlt
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Palette
@@ -110,6 +112,7 @@ fun ProfileScreen(
     onImportBackup: (String) -> Boolean,
     onMessage: (String) -> Unit,
     onBack: () -> Unit,
+    onAbout: () -> Unit,
     onSettingsChange: ((UserSettings) -> UserSettings) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -773,11 +776,55 @@ fun ProfileScreen(
             }
 
             Spacer(Modifier.height(26.dp))
-            Text(
-                text = "Версия ${BuildConfig.VERSION_NAME}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            SectionLabel("Приложение")
+            Spacer(Modifier.height(10.dp))
+            Surface(
+                onClick = {
+                    haptics.tap()
+                    onAbout()
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(26.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.secondaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Info,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.size(19.dp)
+                        )
+                    }
+                    Spacer(Modifier.size(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "О приложении",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Версия ${BuildConfig.VERSION_NAME} · лицензии",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Rounded.ChevronRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
             Spacer(Modifier.height(20.dp))
         }
     }

@@ -89,7 +89,7 @@ object SherpaModelManager {
                                 model = File(dir, MODEL_NAME).absolutePath
                             ),
                             tokens = File(dir, TOKENS_NAME).absolutePath,
-                            numThreads = 2,
+                            numThreads = Runtime.getRuntime().availableProcessors().coerceIn(1, 4),
                             provider = "cpu",
                             debug = false
                         )

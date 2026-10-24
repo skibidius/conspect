@@ -75,6 +75,7 @@ import ru.konspekt.app.data.SpeechEngine
 import ru.konspekt.app.pdf.PdfExporter
 import ru.konspekt.app.ui.components.NewRecordingSheet
 import ru.konspekt.app.ui.components.rememberHaptics
+import ru.konspekt.app.ui.screens.about.AboutScreen
 import ru.konspekt.app.ui.screens.home.HomeScreen
 import ru.konspekt.app.ui.screens.importaudio.ImportAudioScreen
 import ru.konspekt.app.ui.screens.library.LibraryScreen
@@ -448,6 +449,12 @@ fun KonspektApp(viewModel: AppViewModel) {
                 )
             }
 
+            composable("about") {
+                AboutScreen(
+                    onBack = { navController.popBackStack() }
+                )
+            }
+
             composable("profile") {
                 ProfileScreen(
                     settings = viewModel.settings,
@@ -461,6 +468,7 @@ fun KonspektApp(viewModel: AppViewModel) {
                     onImportBackup = viewModel::importBackupJson,
                     onMessage = ::message,
                     onBack = { navController.popBackStack() },
+                    onAbout = { navController.navigate("about") },
                     onSettingsChange = viewModel::updateSettings
                 )
             }

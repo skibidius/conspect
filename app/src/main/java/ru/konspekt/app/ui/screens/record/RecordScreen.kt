@@ -320,6 +320,8 @@ fun RecordScreen(
             subject = subject,
             topic = topic,
             step = processingStep,
+            fragments = lines.size,
+            durationMinutes = (elapsed / 60).coerceAtLeast(1),
             modifier = modifier
         )
         if (processingError != null) {
@@ -1063,6 +1065,8 @@ private fun ProcessingScreen(
     subject: Subject,
     topic: String,
     step: Int,
+    fragments: Int,
+    durationMinutes: Int,
     modifier: Modifier = Modifier
 ) {
     val steps = listOf(
@@ -1141,6 +1145,12 @@ private fun ProcessingScreen(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = "$fragments фрагментов · $durationMinutes мин лекции",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         Spacer(Modifier.height(28.dp))
         Surface(
             modifier = Modifier.fillMaxWidth(),
@@ -1198,14 +1208,33 @@ private fun ProcessingScreen(
                     }
                 }
                 Spacer(Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Локальная обработка",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        text = "${(progress * 100).toInt()}%",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Spacer(Modifier.height(7.dp))
                 LinearProgressIndicator(
                     progress = { progress },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(5.dp)
+                        .height(8.dp)
                         .clip(CircleShape),
                     color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    gapSize = 0.dp,
+                    drawStopIndicator = {}
                 )
             }
         }
