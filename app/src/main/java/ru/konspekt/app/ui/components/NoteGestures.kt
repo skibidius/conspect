@@ -25,6 +25,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -150,25 +151,39 @@ fun SwipeableNoteRow(
     }
 
     val dismissState = rememberSwipeToDismissBoxState(
-        confirmValueChange = { value ->
-            when (value) {
-                SwipeToDismissBoxValue.StartToEnd -> {
-                    haptics.confirm()
-                    onSharePdf()
-                    false
-                }
-
-                SwipeToDismissBoxValue.EndToStart -> {
-                    haptics.confirm()
-                    onDelete()
-                    true
-                }
-
-                SwipeToDismissBoxValue.Settled -> false
-            }
-        },
         positionalThreshold = { distance -> distance * 0.34f }
     )
+
+    // `confirmValueChange` can be called several times while a swipe settles.
+    // Observe the settled value instead and guard the action, so one gesture
+    // can never start several exports or delete the same note twice.
+    var actionHandled by remember(note.id) { mutableStateOf(false) }
+    LaunchedEffect(dismissState.currentValue, note.id) {
+        when (dismissState.currentValue) {
+            SwipeToDismissBoxValue.Settled -> {
+                actionHandled = false
+            }
+
+            SwipeToDismissBoxValue.StartToEnd -> {
+                if (!actionHandled) {
+                    actionHandled = true
+                    haptics.confirm()
+                    onSharePdf()
+                    // Snap back before the share activity opens. Otherwise the
+                    // activity pauses the animation mid-swipe.
+                    dismissState.snapTo(SwipeToDismissBoxValue.Settled)
+                }
+            }
+
+            SwipeToDismissBoxValue.EndToStart -> {
+                if (!actionHandled) {
+                    actionHandled = true
+                    haptics.confirm()
+                    onDelete()
+                }
+            }
+        }
+    }
 
     SwipeToDismissBox(
         state = dismissState,

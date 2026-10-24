@@ -119,6 +119,8 @@ fun KonspektApp(viewModel: AppViewModel) {
     var importRequest by remember { mutableStateOf<ImportRequest?>(null) }
     var preselectedSubject by remember { mutableStateOf<String?>(null) }
     var pendingRecordSubject by remember { mutableStateOf<String?>(null) }
+    var exportingNoteIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var batchExportRunning by remember { mutableStateOf(false) }
 
     val microphonePermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -188,18 +190,18 @@ fun KonspektApp(viewModel: AppViewModel) {
     }
 
     fun trashNotes(ids: List<String>) {
-        val unique = ids.distinct()
-        if (unique.isEmpty()) return
-        unique.forEach(viewModel::deleteNote)
+        val notesToTrash = ids.distinct().filter { viewModel.note(it) != null }
+        if (notesToTrash.isEmpty()) return
+        notesToTrash.forEach(viewModel::deleteNote)
         scope.launch {
             val result = snackbarHostState.showSnackbar(
-                message = if (unique.size == 1) "Конспект в корзине"
-                else "Конспектов в корзине: ${unique.size}",
+                message = if (notesToTrash.size == 1) "Конспект в корзине"
+                else "Конспектов в корзине: ${notesToTrash.size}",
                 actionLabel = "Вернуть",
                 duration = SnackbarDuration.Short
             )
             if (result == SnackbarResult.ActionPerformed) {
-                unique.forEach(viewModel::restoreNote)
+                notesToTrash.forEach(viewModel::restoreNote)
             }
         }
     }
@@ -207,25 +209,31 @@ fun KonspektApp(viewModel: AppViewModel) {
     fun trashNote(id: String) = trashNotes(listOf(id))
 
     fun shareNotePdf(id: String) {
+        if (id in exportingNoteIds) return
         val note = viewModel.note(id) ?: return
         val subject = viewModel.subject(note.subjectId) ?: return
+        exportingNoteIds = exportingNoteIds + id
         PdfExporter.export(context, note, subject) { _, text ->
+            exportingNoteIds = exportingNoteIds - id
             message(text)
         }
     }
 
     fun exportNotesPdf(ids: List<String>) {
+        if (batchExportRunning) return
         val items = ids.distinct().mapNotNull { id ->
             val note = viewModel.note(id) ?: return@mapNotNull null
             val subject = viewModel.subject(note.subjectId) ?: return@mapNotNull null
             note to subject
         }
         if (items.isEmpty()) return
+        batchExportRunning = true
         message("Экспортируем PDF: ${items.size}…")
         var index = 0
         var exported = 0
         fun exportNext() {
             if (index >= items.size) {
+                batchExportRunning = false
                 message(
                     if (exported == 0) "Не удалось экспортировать PDF"
                     else "PDF сохранены в Загрузки: $exported"
