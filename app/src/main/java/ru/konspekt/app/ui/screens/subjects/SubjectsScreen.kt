@@ -6,6 +6,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -410,6 +412,7 @@ private fun AddSubjectCard(onClick: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun AddSubjectDialog(
     onDismiss: () -> Unit,
@@ -419,14 +422,7 @@ private fun AddSubjectDialog(
     var tone by remember { mutableStateOf(SubjectTone.SAGE) }
     var icon by remember { mutableStateOf(SubjectIcon.FUNCTIONS) }
     val haptics = rememberHaptics()
-    val icons = listOf(
-        SubjectIcon.FUNCTIONS,
-        SubjectIcon.SCIENCE,
-        SubjectIcon.TERMINAL,
-        SubjectIcon.LANDMARK,
-        SubjectIcon.LANGUAGE,
-        SubjectIcon.BIOTECH
-    )
+    val icons = SubjectIcon.entries
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -487,7 +483,10 @@ private fun AddSubjectDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                     icons.forEach { item ->
                         val selected = icon == item
                         Box(

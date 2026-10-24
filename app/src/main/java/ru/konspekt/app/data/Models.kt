@@ -3,7 +3,19 @@ package ru.konspekt.app.data
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.rounded.AccountBalance
+import androidx.compose.material.icons.rounded.Calculate
+import androidx.compose.material.icons.rounded.Gavel
+import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.Psychology
+import androidx.compose.material.icons.rounded.Savings
+import androidx.compose.material.icons.rounded.MedicalServices
+import androidx.compose.material.icons.rounded.Public
+import androidx.compose.material.icons.rounded.Engineering
+import androidx.compose.material.icons.rounded.RocketLaunch
+import androidx.compose.material.icons.rounded.FitnessCenter
 import androidx.compose.material.icons.rounded.Biotech
 import androidx.compose.material.icons.rounded.Functions
 import androidx.compose.material.icons.rounded.Science
@@ -11,7 +23,9 @@ import androidx.compose.material.icons.rounded.Terminal
 import androidx.compose.material.icons.rounded.Translate
 
 enum class SubjectIcon {
-    FUNCTIONS, SCIENCE, TERMINAL, LANDMARK, LANGUAGE, BIOTECH;
+    FUNCTIONS, SCIENCE, TERMINAL, LANDMARK, LANGUAGE, BIOTECH,
+    CALCULATE, PSYCHOLOGY, MEDICINE, LAW, ECONOMICS, GEOGRAPHY,
+    ART, MUSIC, ENGINEERING, ASTRONOMY, SPORT, LITERATURE;
 
     val vector: ImageVector
         get() = when (this) {
@@ -21,6 +35,18 @@ enum class SubjectIcon {
             LANDMARK -> Icons.Rounded.AccountBalance
             LANGUAGE -> Icons.Rounded.Translate
             BIOTECH -> Icons.Rounded.Biotech
+            CALCULATE -> Icons.Rounded.Calculate
+            PSYCHOLOGY -> Icons.Rounded.Psychology
+            MEDICINE -> Icons.Rounded.MedicalServices
+            LAW -> Icons.Rounded.Gavel
+            ECONOMICS -> Icons.Rounded.Savings
+            GEOGRAPHY -> Icons.Rounded.Public
+            ART -> Icons.Rounded.Palette
+            MUSIC -> Icons.Rounded.MusicNote
+            ENGINEERING -> Icons.Rounded.Engineering
+            ASTRONOMY -> Icons.Rounded.RocketLaunch
+            SPORT -> Icons.Rounded.FitnessCenter
+            LITERATURE -> Icons.AutoMirrored.Rounded.MenuBook
         }
 }
 
@@ -110,6 +136,8 @@ enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
 enum class AiMode { LOCAL, DEEPSEEK }
 
+enum class SpeechEngine { VOSK, SYSTEM }
+
 enum class Palette { SAGE, SKY, LAVENDER, CLAY }
 
 data class UserSettings(
@@ -118,7 +146,8 @@ data class UserSettings(
     val palette: Palette = Palette.SAGE,
     val dynamicColor: Boolean = true,
     val filterTangents: Boolean = true,
-    val aiMode: AiMode = AiMode.LOCAL
+    val aiMode: AiMode = AiMode.LOCAL,
+    val speechEngine: SpeechEngine = SpeechEngine.VOSK
 )
 
 data class NoteGenerationResult(

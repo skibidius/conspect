@@ -2,6 +2,7 @@ package ru.konspekt.app.ui.screens.record
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.speech.SpeechRecognizer
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -89,6 +90,8 @@ import kotlinx.coroutines.delay
 import ru.konspekt.app.BuildConfig
 import ru.konspekt.app.data.NoteGenerationResult
 import ru.konspekt.app.data.Subject
+import ru.konspekt.app.recording.SpeechCapture
+import ru.konspekt.app.recording.SystemSpeechCapture
 import ru.konspekt.app.recording.VoskModelManager
 import ru.konspekt.app.recording.VoskSpeechCapture
 import ru.konspekt.app.ui.components.KonspektLogo
@@ -127,12 +130,15 @@ fun RecordScreen(
     topic: String,
     demoMode: Boolean,
     cloudMode: Boolean,
+    useSystemSpeech: Boolean,
     onClose: () -> Unit,
     onFinish: suspend (transcript: List<String>, durationSeconds: Int, demo: Boolean) -> NoteGenerationResult,
     onCompleted: (NoteGenerationResult) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val systemAvailable = remember { SpeechRecognizer.isRecognitionAvailable(context) }
+    val systemSpeech = useSystemSpeech && systemAvailable
     val selectedModelSize = remember { VoskModelManager.selected(context).sizeLabel }
     val initialDemoLines = remember(demoMode) {
         if (!demoMode) emptyList() else demoScript.take(4).mapIndexed { index, line ->
@@ -151,7 +157,7 @@ fun RecordScreen(
     var speechError by remember { mutableStateOf<String?>(null) }
     var recognitionStatus by remember { mutableStateOf<String?>(null) }
     var modelDownloading by remember {
-        mutableStateOf(!demoMode && !VoskModelManager.isReady(context))
+        mutableStateOf(!demoMode && !systemSpeech && !VoskModelManager.isReady(context))
     }
     var modelProgress by remember { mutableFloatStateOf(0f) }
     var showCloseDialog by remember { mutableStateOf(false) }
@@ -170,37 +176,52 @@ fun RecordScreen(
         if (stage != RecordStage.PROCESSING) showCloseDialog = true
     }
 
-    val speechCapture = remember {
-        VoskSpeechCapture(
-            context = context,
-            onPartial = { partialText = it },
-            onFinal = { text ->
-                if (text.isNotBlank()) {
-                    lines.add(
-                        TranscriptLine(
-                            time = formatTime(elapsed),
-                            text = text.trim(),
-                            offTopic = isOffTopic(text)
-                        )
-                    )
-                    partialText = ""
+    fun acceptFinal(text: String) {
+        if (text.isNotBlank()) {
+            lines.add(
+                TranscriptLine(
+                    time = formatTime(elapsed),
+                    text = text.trim(),
+                    offTopic = isOffTopic(text)
+                )
+            )
+            partialText = ""
+        }
+    }
+
+    fun handleError(message: String) {
+        speechError = message
+        partialText = ""
+        modelDownloading = false
+    }
+
+    val speechCapture: SpeechCapture = remember(systemSpeech) {
+        if (systemSpeech) {
+            SystemSpeechCapture(
+                context = context,
+                onPartial = { partialText = it },
+                onFinal = ::acceptFinal,
+                onAmplitude = { amplitude = it },
+                onStatus = { status -> recognitionStatus = status },
+                onError = ::handleError
+            )
+        } else {
+            VoskSpeechCapture(
+                context = context,
+                onPartial = { partialText = it },
+                onFinal = ::acceptFinal,
+                onAmplitude = { amplitude = it },
+                onStatus = { status ->
+                    recognitionStatus = status
+                    if (status == "Готово") modelDownloading = false
+                },
+                onError = ::handleError,
+                onModelProgress = { progress ->
+                    modelDownloading = true
+                    modelProgress = progress
                 }
-            },
-            onAmplitude = { amplitude = it },
-            onStatus = { status ->
-                recognitionStatus = status
-                if (status == "Готово") modelDownloading = false
-            },
-            onError = { message ->
-                speechError = message
-                partialText = ""
-                modelDownloading = false
-            },
-            onModelProgress = { progress ->
-                modelDownloading = true
-                modelProgress = progress
-            }
-        )
+            )
+        }
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(

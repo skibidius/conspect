@@ -3,6 +3,8 @@ package ru.konspekt.app.ui.screens.subjects
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -284,6 +286,7 @@ fun SubjectDetailScreen(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun EditSubjectDialog(
     subject: Subject,
@@ -294,10 +297,7 @@ private fun EditSubjectDialog(
     var tone by remember { mutableStateOf(subject.tone) }
     var icon by remember { mutableStateOf(subject.icon) }
     val haptics = rememberHaptics()
-    val icons = listOf(
-        SubjectIcon.FUNCTIONS, SubjectIcon.SCIENCE, SubjectIcon.TERMINAL,
-        SubjectIcon.LANDMARK, SubjectIcon.LANGUAGE, SubjectIcon.BIOTECH
-    )
+    val icons = SubjectIcon.entries
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -352,7 +352,10 @@ private fun EditSubjectDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                     icons.forEach { item ->
                         val selected = icon == item
                         Box(

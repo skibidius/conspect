@@ -30,7 +30,7 @@ class VoskSpeechCapture(
     private val onStatus: (String) -> Unit,
     private val onError: (String) -> Unit,
     private val onModelProgress: (Float) -> Unit = {}
-) {
+) : SpeechCapture {
     private val main = Handler(Looper.getMainLooper())
     private var recognizer: Recognizer? = null
     private var audioRecord: AudioRecord? = null
@@ -42,7 +42,7 @@ class VoskSpeechCapture(
     @Volatile
     private var sessionId = 0
 
-    fun start() {
+    override fun start() {
         if (running) return
         running = true
         val session = ++sessionId
@@ -228,7 +228,7 @@ class VoskSpeechCapture(
         return ((db + 60.0) / 50.0).toFloat().coerceIn(0f, 1f)
     }
 
-    fun stop() {
+    override fun stop() {
         val worker = thread
         thread = null
         running = false

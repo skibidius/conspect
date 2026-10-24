@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import android.speech.SpeechRecognizer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Lock
@@ -57,6 +58,7 @@ fun NewRecordingSheet(
     subjects: List<Subject>,
     initialSubjectId: String?,
     filterTangents: Boolean,
+    useSystemSpeech: Boolean,
     onFilterChange: (Boolean) -> Unit,
     onDismiss: () -> Unit,
     onStart: (subjectId: String, topic: String) -> Unit
@@ -70,6 +72,8 @@ fun NewRecordingSheet(
     val context = LocalContext.current
     val voskReady = remember { VoskModelManager.isReady(context) }
     val selectedModel = remember { VoskModelManager.selected(context) }
+    val systemAvailable = remember { SpeechRecognizer.isRecognitionAvailable(context) }
+    val systemSpeech = useSystemSpeech && systemAvailable
     val haptics = rememberHaptics()
 
     ModalBottomSheet(
@@ -206,18 +210,21 @@ fun NewRecordingSheet(
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    imageVector = if (voskReady) Icons.Rounded.CheckCircle else Icons.Rounded.CloudDownload,
+                    imageVector = if (systemSpeech || voskReady) Icons.Rounded.CheckCircle
+                    else Icons.Rounded.CloudDownload,
                     contentDescription = null,
-                    tint = if (voskReady) MaterialTheme.colorScheme.primary
+                    tint = if (systemSpeech || voskReady) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(14.dp)
                 )
                 Spacer(Modifier.width(5.dp))
                 Text(
-                    text = if (voskReady) {
-                        "Офлайн-модель распознавания готова"
-                    } else {
-                        "Модель распознавания загрузится при старте (${selectedModel.sizeLabel})"
+                    text = when {
+                        systemSpeech -> "Системное распознавание Android"
+                        useSystemSpeech && !systemAvailable ->
+                            "Системное распознавание недоступно — используется Vosk"
+                        voskReady -> "Офлайн-модель распознавания готова"
+                        else -> "Модель распознавания загрузится при старте (${selectedModel.sizeLabel})"
                     },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant

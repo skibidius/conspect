@@ -1,6 +1,7 @@
 package ru.konspekt.app.ui.screens.profile
 
 import android.os.Build
+import android.speech.SpeechRecognizer
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -85,6 +86,7 @@ import ru.konspekt.app.recording.VoskModel
 import ru.konspekt.app.recording.VoskModelManager
 import ru.konspekt.app.data.AiMode
 import ru.konspekt.app.data.Palette
+import ru.konspekt.app.data.SpeechEngine
 import ru.konspekt.app.data.ThemeMode
 import ru.konspekt.app.data.UserSettings
 import ru.konspekt.app.ui.components.DividerLine
@@ -120,6 +122,7 @@ fun ProfileScreen(
     var modelError by remember { mutableStateOf<String?>(null) }
     val haptics = rememberHaptics()
     val uriHandler = LocalUriHandler.current
+    val systemSpeechAvailable = remember { SpeechRecognizer.isRecognitionAvailable(context) }
     val animatedModelProgress by animateFloatAsState(
         targetValue = modelProgress,
         animationSpec = tween(300),
@@ -355,6 +358,39 @@ fun ProfileScreen(
             SectionLabel("Запись и конспекты")
             Spacer(Modifier.height(10.dp))
             SettingsCard {
+                SettingHeader(
+                    icon = Icons.Rounded.Tune,
+                    title = "Движок распознавания",
+                    subtitle = "Vosk офлайн или системный Android"
+                )
+                Spacer(Modifier.height(12.dp))
+                SpeechEngineSelector(
+                    selected = settings.speechEngine,
+                    systemAvailable = systemSpeechAvailable,
+                    onSelect = { engine -> onSettingsChange { it.copy(speechEngine = engine) } }
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = when {
+                        settings.speechEngine == SpeechEngine.SYSTEM && systemSpeechAvailable ->
+                            "Системное распознавание может обрабатываться сервисом Google. Качество обычно выше, память почти не расходуется."
+                        settings.speechEngine == SpeechEngine.SYSTEM ->
+                            "Системное распознавание недоступно — будет использован Vosk."
+                        !systemSpeechAvailable ->
+                            "Vosk работает полностью офлайн. Системный движок на этом устройстве недоступен."
+                        else ->
+                            "Vosk работает полностью офлайн. Модель скачивается один раз."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (settings.speechEngine == SpeechEngine.SYSTEM && !systemSpeechAvailable) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
+                Spacer(Modifier.height(14.dp))
+                DividerLine()
+                Spacer(Modifier.height(14.dp))
                 SwitchRow(
                     icon = Icons.Rounded.FilterAlt,
                     title = "Убирать отступления",
@@ -364,7 +400,6 @@ fun ProfileScreen(
                         onSettingsChange { it.copy(filterTangents = enabled) }
                     }
                 )
-
             }
 
             Spacer(Modifier.height(26.dp))
@@ -892,6 +927,31 @@ private fun SettingHeader(icon: ImageVector, title: String, subtitle: String) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+    }
+}
+
+@Composable
+private fun SpeechEngineSelector(
+    selected: SpeechEngine,
+    systemAvailable: Boolean,
+    onSelect: (SpeechEngine) -> Unit
+) {
+    val options = listOf(SpeechEngine.VOSK to "Vosk", SpeechEngine.SYSTEM to "Системный")
+    val haptics = rememberHaptics()
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+        options.forEachIndexed { index, (engine, label) ->
+            SegmentedButton(
+                selected = selected == engine,
+                enabled = engine != SpeechEngine.SYSTEM || systemAvailable,
+                onClick = {
+                    haptics.tap()
+                    onSelect(engine)
+                },
+                shape = SegmentedButtonDefaults.itemShape(index, options.size)
+            ) {
+                Text(label)
+            }
         }
     }
 }

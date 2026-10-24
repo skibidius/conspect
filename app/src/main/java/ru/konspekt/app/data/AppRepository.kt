@@ -31,6 +31,10 @@ class AppRepository(context: Context) {
                 aiMode = when (json.optString("aiMode")) {
                     "DEEPSEEK" -> AiMode.DEEPSEEK
                     else -> AiMode.LOCAL
+                },
+                speechEngine = when (json.optString("speechEngine")) {
+                    "SYSTEM" -> SpeechEngine.SYSTEM
+                    else -> SpeechEngine.VOSK
                 }
             )
         }.getOrDefault(UserSettings())

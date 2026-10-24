@@ -63,6 +63,7 @@ import androidx.navigation.navArgument
 import kotlinx.coroutines.launch
 import ru.konspekt.app.BuildConfig
 import ru.konspekt.app.data.AppViewModel
+import ru.konspekt.app.data.SpeechEngine
 import ru.konspekt.app.ui.components.NewRecordingSheet
 import ru.konspekt.app.ui.components.rememberHaptics
 import ru.konspekt.app.ui.screens.home.HomeScreen
@@ -377,6 +378,7 @@ fun KonspektApp(viewModel: AppViewModel) {
                         topic = topic,
                         demoMode = BuildConfig.DEBUG,
                         cloudMode = viewModel.settings.aiMode == ru.konspekt.app.data.AiMode.DEEPSEEK && viewModel.hasDeepSeekKey,
+                        useSystemSpeech = viewModel.settings.speechEngine == SpeechEngine.SYSTEM,
                         onClose = { navController.popBackStack() },
                         onFinish = { transcript, durationSeconds, demo ->
                             viewModel.generateNote(
@@ -408,6 +410,7 @@ fun KonspektApp(viewModel: AppViewModel) {
             subjects = viewModel.subjects,
             initialSubjectId = preselectedSubject,
             filterTangents = viewModel.settings.filterTangents,
+            useSystemSpeech = viewModel.settings.speechEngine == SpeechEngine.SYSTEM,
             onFilterChange = { enabled ->
                 viewModel.updateSettings { it.copy(filterTangents = enabled) }
             },
