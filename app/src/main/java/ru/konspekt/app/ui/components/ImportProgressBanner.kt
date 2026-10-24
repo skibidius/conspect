@@ -1,5 +1,6 @@
 package ru.konspekt.app.ui.components
 
+import android.os.SystemClock
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,6 +19,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,6 +31,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ru.konspekt.app.data.AudioImportState
 import ru.konspekt.app.recording.AudioTranscriptionStage
+import kotlinx.coroutines.delay
 
 @Composable
 fun ImportProgressBanner(
@@ -33,7 +40,17 @@ fun ImportProgressBanner(
     modifier: Modifier = Modifier
 ) {
     val progress = state.progress.fraction.coerceIn(0f, 1f)
-    val detail = when (state.progress.stage) {
+    var elapsedTick by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
+    LaunchedEffect(state.startedAtMillis) {
+        while (true) {
+            elapsedTick = SystemClock.elapsedRealtime()
+            delay(1_000)
+        }
+    }
+    val elapsed = formatDuration(
+        ((elapsedTick - state.startedAtMillis) / 1000).coerceAtLeast(0).toInt()
+    )
+    val baseDetail = when (state.progress.stage) {
         AudioTranscriptionStage.MODEL -> "Загружаем модель GigaAM"
         AudioTranscriptionStage.PREPARING -> "Подготавливаем аудио"
         AudioTranscriptionStage.RECOGNIZING -> {
@@ -47,6 +64,7 @@ fun ImportProgressBanner(
         }
         AudioTranscriptionStage.FINALIZING -> "Собираем конспект"
     }
+    val detail = "Прошло $elapsed · $baseDetail"
 
     Surface(
         onClick = onClick,

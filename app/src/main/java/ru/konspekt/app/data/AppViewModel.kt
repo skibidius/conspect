@@ -2,6 +2,7 @@ package ru.konspekt.app.data
 
 import android.app.Application
 import android.net.Uri
+import android.os.SystemClock
 import ru.konspekt.app.BuildConfig
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -117,7 +118,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             progress = AudioTranscriptionProgress(
                 stage = AudioTranscriptionStage.MODEL,
                 fraction = 0f
-            )
+            ),
+            startedAtMillis = SystemClock.elapsedRealtime()
         )
 
         audioImportJob = viewModelScope.launch {

@@ -7,6 +7,7 @@ import android.net.Uri
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -17,6 +18,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -120,6 +122,17 @@ fun KonspektApp(viewModel: AppViewModel) {
     var batchExportRunning by remember { mutableStateOf(false) }
     val audioImportState = viewModel.audioImport
     val importScreenVisible = viewModel.importScreenVisible
+    var displayedImport by remember {
+        mutableStateOf<AudioImportState?>(
+            audioImportState.takeIf { it !is AudioImportState.Idle }
+        )
+    }
+    LaunchedEffect(audioImportState) {
+        if (audioImportState !is AudioImportState.Idle) {
+            displayedImport = audioImportState
+        }
+    }
+    val importOverlayVisible = importScreenVisible && audioImportState !is AudioImportState.Idle
 
     val microphonePermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -276,52 +289,24 @@ fun KonspektApp(viewModel: AppViewModel) {
         viewModel.consumeAudioImport()
     }
 
-    if (importScreenVisible && audioImportState !is AudioImportState.Idle) {
-        val state = audioImportState
-        val subjectId = when (state) {
-            is AudioImportState.Running -> state.subjectId
-            is AudioImportState.Completed -> state.subjectId
-            is AudioImportState.Failed -> state.subjectId
-            AudioImportState.Idle -> ""
-        }
-        val topic = when (state) {
-            is AudioImportState.Running -> state.topic
-            is AudioImportState.Completed -> state.topic
-            is AudioImportState.Failed -> state.topic
-            AudioImportState.Idle -> ""
-        }
-        val importSubject = viewModel.subject(subjectId) ?: viewModel.subjects.firstOrNull()
-        if (importSubject != null) {
-            ImportAudioScreen(
-                subject = importSubject,
-                topic = topic,
-                state = state,
-                onClose = viewModel::hideImportScreen,
-                onCompleted = { completed ->
-                    viewModel.consumeAudioImport()
-                    navController.navigate("note/${completed.noteId}") {
-                        launchSingleTop = true
-                    }
-                    completed.warning?.let(::message)
-                }
-            )
-            return
-        } else {
-            viewModel.consumeAudioImport()
-        }
-    }
-
+    Box(Modifier.fillMaxSize()) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             Column {
                 val runningImport = audioImportState as? AudioImportState.Running
-                if (runningImport != null && !importScreenVisible) {
-                    ImportProgressBanner(
-                        state = runningImport,
-                        onClick = viewModel::showImportScreen
-                    )
+                AnimatedVisibility(
+                    visible = runningImport != null && !importScreenVisible,
+                    enter = fadeIn(tween(180)) + slideInVertically(tween(240)) { it },
+                    exit = fadeOut(tween(140)) + slideOutVertically(tween(200)) { it }
+                ) {
+                    runningImport?.let { importState ->
+                        ImportProgressBanner(
+                            state = importState,
+                            onClick = viewModel::showImportScreen
+                        )
+                    }
                 }
                 if (isRoot) {
                     NavigationBar(
@@ -610,6 +595,57 @@ fun KonspektApp(viewModel: AppViewModel) {
             }
         }
 
+    }
+
+        AnimatedVisibility(
+            visible = importOverlayVisible,
+            modifier = Modifier.fillMaxSize(),
+            enter = fadeIn(tween(220)) + slideInVertically(tween(320)) { it / 16 },
+            exit = fadeOut(tween(180)) + slideOutVertically(tween(240)) { it / 24 }
+        ) {
+            val state = displayedImport
+            if (state != null) {
+                val subjectId = when (state) {
+                    is AudioImportState.Running -> state.subjectId
+                    is AudioImportState.Completed -> state.subjectId
+                    is AudioImportState.Failed -> state.subjectId
+                    AudioImportState.Idle -> ""
+                }
+                val topic = when (state) {
+                    is AudioImportState.Running -> state.topic
+                    is AudioImportState.Completed -> state.topic
+                    is AudioImportState.Failed -> state.topic
+                    AudioImportState.Idle -> ""
+                }
+                val importSubject = viewModel.subject(subjectId) ?: viewModel.subjects.firstOrNull()
+                if (importSubject != null) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = {}
+                            )
+                    ) {
+                        ImportAudioScreen(
+                            subject = importSubject,
+                            topic = topic,
+                            state = state,
+                            onClose = viewModel::hideImportScreen,
+                            onCompleted = { completed ->
+                                viewModel.consumeAudioImport()
+                                navController.navigate("note/${completed.noteId}") {
+                                    launchSingleTop = true
+                                }
+                                completed.warning?.let(::message)
+                            }
+                        )
+                    }
+                }
+            }
+        }
     }
 
     if (showRecordingSheet) {

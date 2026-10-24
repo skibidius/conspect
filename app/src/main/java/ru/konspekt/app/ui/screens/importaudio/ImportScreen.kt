@@ -1,6 +1,15 @@
 package ru.konspekt.app.ui.screens.importaudio
 
+import android.os.SystemClock
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -31,7 +40,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,6 +59,7 @@ import ru.konspekt.app.recording.AudioTranscriptionProgress
 import ru.konspekt.app.recording.AudioTranscriptionStage
 import ru.konspekt.app.ui.components.KonspektLogo
 import ru.konspekt.app.ui.components.rememberHaptics
+import kotlinx.coroutines.delay
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
@@ -70,11 +84,28 @@ fun ImportAudioScreen(
     val running = (state as? AudioImportState.Running)?.progress
     val failed = state as? AudioImportState.Failed
     val completed = state is AudioImportState.Completed
+    var elapsedTick by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
+    val runningStartedAt = (state as? AudioImportState.Running)?.startedAtMillis
+    LaunchedEffect(runningStartedAt) {
+        while (runningStartedAt != null) {
+            elapsedTick = SystemClock.elapsedRealtime()
+            delay(1_000)
+        }
+    }
+    val elapsedSeconds = runningStartedAt?.let {
+        ((elapsedTick - it) / 1000).coerceAtLeast(0).toInt()
+    }
+    val elapsedLabel = elapsedSeconds?.let { "Прошло ${formatDuration(it)}" }
     val progress = when {
         completed -> 1f
         running != null -> running.fraction.coerceIn(0f, 1f)
         else -> 0f
     }
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress,
+        animationSpec = tween(320),
+        label = "import-progress"
+    )
     val stageTitle = when {
         completed -> "Конспект готов"
         failed != null -> "Ошибка"
@@ -88,18 +119,22 @@ fun ImportAudioScreen(
         completed -> "Сохраняем результат…"
         failed != null -> failed.message
         running == null -> "Читаем аудиодорожку…"
-        running.stage == AudioTranscriptionStage.MODEL ->
-            if (running.stageFraction >= 1f) {
-                "Модель готова, загружаем её в память…"
+        running.stage == AudioTranscriptionStage.MODEL -> {
+            val model = if (running.stageFraction >= 1f) {
+                "Модель готова, загружаем в память…"
             } else {
                 "Скачано ${(running.stageFraction * 100).toInt()}% модели"
             }
-        running.stage == AudioTranscriptionStage.PREPARING ->
-            if (running.totalSeconds > 0) {
+            elapsedLabel?.let { "$it · $model" } ?: model
+        }
+        running.stage == AudioTranscriptionStage.PREPARING -> {
+            val prep = if (running.totalSeconds > 0) {
                 "Длительность: ${formatDuration(running.totalSeconds)}"
             } else {
                 "Читаем аудиодорожку…"
             }
+            elapsedLabel?.let { "$it · $prep" } ?: prep
+        }
         running.stage == AudioTranscriptionStage.RECOGNIZING -> {
             val processed = formatDuration(running.processedSeconds)
             val total = if (running.totalSeconds > 0) {
@@ -108,9 +143,11 @@ fun ImportAudioScreen(
                 ""
             }
             val eta = running.etaSeconds?.let { " · осталось ~${formatEta(it)}" }.orEmpty()
-            "Обработано $processed$total$eta"
+            val elapsed = elapsedLabel?.let { "$it · " }.orEmpty()
+            "$elapsed$processed$total$eta"
         }
-        else -> "Структурируем тезисы и сохраняем конспект"
+        else -> elapsedLabel?.let { "$it · структурируем тезисы…" }
+            ?: "Структурируем тезисы и сохраняем конспект"
     }
 
     Column(
@@ -169,7 +206,9 @@ fun ImportAudioScreen(
             Spacer(Modifier.height(28.dp))
 
             Surface(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .animateContentSize(tween(220)),
                 shape = RoundedCornerShape(24.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
@@ -192,16 +231,25 @@ fun ImportAudioScreen(
                             )
                             if (failed == null) {
                                 Spacer(Modifier.height(2.dp))
-                                Text(
-                                    text = stageTitle,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                AnimatedContent(
+                                    targetState = stageTitle,
+                                    transitionSpec = {
+                                        (fadeIn(tween(180)) + slideInVertically(tween(220)) { it / 2 })
+                                            .togetherWith(fadeOut(tween(120)))
+                                    },
+                                    label = "import-stage"
+                                ) { title ->
+                                    Text(
+                                        text = title,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                         }
                         if (failed == null) {
                             Text(
-                                text = "${(progress * 100).toInt()}%",
+                                text = "${(animatedProgress * 100).toInt()}%",
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.primary
                             )
@@ -210,7 +258,7 @@ fun ImportAudioScreen(
                     Spacer(Modifier.height(14.dp))
                     if (failed == null) {
                         LinearProgressIndicator(
-                            progress = { progress },
+                            progress = { animatedProgress },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(12.dp)
