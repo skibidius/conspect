@@ -306,7 +306,11 @@ fun KonspektApp(viewModel: AppViewModel) {
                     runningImport?.let { importState ->
                         ImportProgressBanner(
                             state = importState,
-                            onClick = viewModel::showImportScreen
+                            onClick = viewModel::showImportScreen,
+                            onStop = {
+                                viewModel.cancelAudioImport()
+                                message("Обработка остановлена")
+                            }
                         )
                     }
                 }
@@ -636,6 +640,10 @@ fun KonspektApp(viewModel: AppViewModel) {
                             topic = topic,
                             state = state,
                             onClose = viewModel::hideImportScreen,
+                            onStop = {
+                                viewModel.cancelAudioImport()
+                                message("Обработка остановлена")
+                            },
                             onCompleted = { completed ->
                                 viewModel.consumeAudioImport()
                                 navController.navigate("note/${completed.noteId}") {

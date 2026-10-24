@@ -1,6 +1,5 @@
 package ru.konspekt.app.ui.components
 
-import android.os.SystemClock
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,18 +11,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AudioFile
-import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.StopCircle
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,40 +26,24 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ru.konspekt.app.data.AudioImportState
 import ru.konspekt.app.recording.AudioTranscriptionStage
-import kotlinx.coroutines.delay
 
 @Composable
 fun ImportProgressBanner(
     state: AudioImportState.Running,
     onClick: () -> Unit,
+    onStop: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val haptics = rememberHaptics()
     val progress = state.progress.fraction.coerceIn(0f, 1f)
-    var elapsedTick by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
-    LaunchedEffect(state.startedAtMillis) {
-        while (true) {
-            elapsedTick = SystemClock.elapsedRealtime()
-            delay(1_000)
-        }
+    val remaining = state.progress.etaSeconds
+    val detail = when {
+        remaining != null -> "Осталось ~${formatEta(remaining)}"
+        state.progress.stage == AudioTranscriptionStage.MODEL -> "Осталось: готовим модель…"
+        state.progress.stage == AudioTranscriptionStage.PREPARING -> "Осталось: читаем аудио…"
+        state.progress.stage == AudioTranscriptionStage.FINALIZING -> "Осталось: собираем конспект…"
+        else -> "Осталось: оцениваем…"
     }
-    val elapsed = formatDuration(
-        ((elapsedTick - state.startedAtMillis) / 1000).coerceAtLeast(0).toInt()
-    )
-    val baseDetail = when (state.progress.stage) {
-        AudioTranscriptionStage.MODEL -> "Загружаем модель GigaAM"
-        AudioTranscriptionStage.PREPARING -> "Подготавливаем аудио"
-        AudioTranscriptionStage.RECOGNIZING -> {
-            val processed = formatDuration(state.progress.processedSeconds)
-            val total = if (state.progress.totalSeconds > 0) {
-                " из ${formatDuration(state.progress.totalSeconds)}"
-            } else {
-                ""
-            }
-            "Обработано $processed$total"
-        }
-        AudioTranscriptionStage.FINALIZING -> "Собираем конспект"
-    }
-    val detail = "Прошло $elapsed · $baseDetail"
 
     Surface(
         onClick = onClick,
@@ -74,7 +53,7 @@ fun ImportProgressBanner(
         shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh
     ) {
-        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+        Column(modifier = Modifier.padding(start = 14.dp, end = 6.dp, top = 10.dp, bottom = 10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Icons.Rounded.AudioFile,
@@ -104,18 +83,25 @@ fun ImportProgressBanner(
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary
                 )
-                Icon(
-                    imageVector = Icons.Rounded.ChevronRight,
-                    contentDescription = "Открыть прогресс",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
-                )
+                IconButton(
+                    onClick = {
+                        haptics.confirm()
+                        onStop()
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.StopCircle,
+                        contentDescription = "Остановить обработку",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
             }
             Spacer(Modifier.height(7.dp))
             LinearProgressIndicator(
                 progress = { progress },
                 modifier = Modifier
                     .fillMaxWidth()
+                    .padding(end = 8.dp)
                     .height(4.dp)
                     .clip(CircleShape),
                 color = MaterialTheme.colorScheme.primary,
@@ -127,11 +113,11 @@ fun ImportProgressBanner(
     }
 }
 
-private fun formatDuration(seconds: Int): String {
+private fun formatEta(seconds: Int): String {
     val safe = seconds.coerceAtLeast(0)
-    return if (safe >= 3600) {
-        "%d:%02d:%02d".format(safe / 3600, (safe % 3600) / 60, safe % 60)
-    } else {
-        "%d:%02d".format(safe / 60, safe % 60)
+    return when {
+        safe >= 3600 -> "${safe / 3600} ч ${(safe % 3600 + 59) / 60} мин"
+        safe >= 60 -> "${(safe + 59) / 60} мин"
+        else -> "меньше минуты"
     }
 }

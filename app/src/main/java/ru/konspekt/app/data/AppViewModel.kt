@@ -9,6 +9,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import ru.konspekt.app.recording.AudioFileTranscriber
@@ -123,7 +124,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         )
 
         audioImportJob = viewModelScope.launch {
-            runCatching {
+            try {
                 val transcription = AudioFileTranscriber.transcribe(
                     context = getApplication(),
                     uri = uri
@@ -138,21 +139,22 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 val durationMinutes = ((transcription.durationSeconds + 59) / 60)
                     .coerceAtLeast(1)
-                generateNote(
+                val result = generateNote(
                     subjectId = subjectId,
                     topic = topic,
                     transcript = transcription.lines,
                     durationMinutes = durationMinutes,
                     demo = false
                 )
-            }.onSuccess { result ->
                 audioImport = AudioImportState.Completed(
                     subjectId = subjectId,
                     topic = topic,
                     noteId = result.noteId,
                     warning = result.warning
                 )
-            }.onFailure { error ->
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
                 audioImport = AudioImportState.Failed(
                     subjectId = subjectId,
                     topic = topic,
@@ -160,6 +162,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 )
             }
         }
+    }
+
+    fun cancelAudioImport() {
+        audioImportJob?.cancel()
+        audioImportJob = null
+        audioImport = AudioImportState.Idle
+        importScreenVisible = false
     }
 
     fun hideImportScreen() {
@@ -214,7 +223,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
         val cloudKey = apiKeyStore.load()
         if (settings.aiMode == AiMode.DEEPSEEK && !cloudKey.isNullOrBlank()) {
-            val cloudNote = runCatching {
+            val cloudResult = runCatching {
                 deepSeek.generate(
                     apiKey = cloudKey,
                     subject = subject,
@@ -223,11 +232,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     durationMinutes = durationMinutes,
                     filterTangents = settings.filterTangents
                 )
-            }.getOrNull()
+            }
+            val cloudNote = cloudResult.getOrNull()
             if (cloudNote != null) {
                 saveGeneratedNote(cloudNote)
                 return NoteGenerationResult(cloudNote.id)
             }
+            val cloudError = cloudResult.exceptionOrNull()?.message
+                ?.takeIf { it.isNotBlank() }
             val fallback = LocalLectureStructurer.build(
                 subject = subject,
                 topic = resolvedTopic,
@@ -240,7 +252,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             saveGeneratedNote(fallback)
             return NoteGenerationResult(
                 fallback.id,
-                "DeepSeek недоступен. Конспект собран локально."
+                cloudError?.let { "DeepSeek: $it. Конспект собран локально." }
+                    ?: "DeepSeek недоступен. Конспект собран локально."
             )
         }
 

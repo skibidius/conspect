@@ -16,6 +16,7 @@ import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
 enum class AudioTranscriptionStage {
@@ -212,6 +213,7 @@ object AudioFileTranscriber {
             )
 
             while (!outputDone) {
+                coroutineContext.ensureActive()
                 if (!inputDone) {
                     val inputIndex = decoder.dequeueInputBuffer(10_000)
                     if (inputIndex >= 0) {

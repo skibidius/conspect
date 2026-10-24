@@ -35,7 +35,7 @@ class DeepSeekClient {
         val request = JSONObject().apply {
             put("model", "deepseek-flash")
             put("temperature", 0.2)
-            put("max_tokens", 4096)
+            put("max_tokens", 12_000)
             put("response_format", JSONObject().put("type", "json_object"))
             put(
                 "messages",
@@ -66,8 +66,8 @@ class DeepSeekClient {
     private fun post(apiKey: String, payload: String): String {
         val connection = (URL(ENDPOINT).openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
-            connectTimeout = 20_000
-            readTimeout = 120_000
+            connectTimeout = 30_000
+            readTimeout = 300_000
             doOutput = true
             setRequestProperty("Content-Type", "application/json; charset=utf-8")
             setRequestProperty("Authorization", "Bearer ${apiKey.trim()}")
