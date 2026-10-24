@@ -1,8 +1,11 @@
 package ru.konspekt.app.ui.screens.importaudio
 
-import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -29,11 +32,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,9 +40,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import ru.konspekt.app.data.NoteGenerationResult
+import ru.konspekt.app.data.AudioImportState
 import ru.konspekt.app.data.Subject
-import ru.konspekt.app.recording.AudioFileTranscriber
 import ru.konspekt.app.recording.AudioTranscriptionProgress
 import ru.konspekt.app.recording.AudioTranscriptionStage
 import ru.konspekt.app.ui.components.KonspektLogo
@@ -55,92 +52,65 @@ import ru.konspekt.app.ui.components.rememberHaptics
 fun ImportAudioScreen(
     subject: Subject,
     topic: String,
-    uri: Uri,
+    state: AudioImportState,
     onClose: () -> Unit,
-    onFinish: suspend (lines: List<String>, durationSeconds: Int) -> NoteGenerationResult,
-    onCompleted: (NoteGenerationResult) -> Unit,
+    onCompleted: (AudioImportState.Completed) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val haptics = rememberHaptics()
-    var update by remember {
-        mutableStateOf(
-            AudioTranscriptionProgress(
-                stage = AudioTranscriptionStage.MODEL,
-                fraction = 0f
-            )
-        )
-    }
 
-    var error by remember { mutableStateOf<String?>(null) }
-    var started by remember { mutableStateOf(false) }
-
-    LaunchedEffect(uri) {
-        if (started) return@LaunchedEffect
-        started = true
-        val transcription = runCatching {
-            AudioFileTranscriber.transcribe(
-                context = context,
-                uri = uri,
-                onProgress = { update = it }
-            )
-        }.getOrElse { throwable ->
-            error = throwable.message ?: "Не удалось прочитать аудио"
-            null
-        } ?: return@LaunchedEffect
-
-        if (transcription.lines.isEmpty()) {
-            error = "Речь не распознана. Попробуйте файл с более чистым звуком."
-            return@LaunchedEffect
+    BackHandler(onBack = onClose)
+    LaunchedEffect(state) {
+        if (state is AudioImportState.Completed) {
+            onCompleted(state)
         }
-        update = update.copy(
-            stage = AudioTranscriptionStage.FINALIZING,
-            fraction = 0.995f,
-            stageFraction = 1f,
-            processedSeconds = transcription.durationSeconds,
-            totalSeconds = transcription.durationSeconds
-        )
-        val result = runCatching {
-            onFinish(transcription.lines, transcription.durationSeconds)
-        }.getOrElse {
-            error = "Не удалось собрать конспект"
-            null
-        }
-        if (result != null) onCompleted(result)
     }
 
-    val progress = update.fraction.coerceIn(0f, 1f)
-    val stageTitle = when (update.stage) {
-        AudioTranscriptionStage.MODEL -> "Загружаем модель GigaAM"
-        AudioTranscriptionStage.PREPARING -> "Подготавливаем аудио"
-        AudioTranscriptionStage.RECOGNIZING -> "Расшифровываем лекцию"
-        AudioTranscriptionStage.FINALIZING -> "Собираем конспект"
+    val running = (state as? AudioImportState.Running)?.progress
+    val failed = state as? AudioImportState.Failed
+    val completed = state is AudioImportState.Completed
+    val progress = when {
+        completed -> 1f
+        running != null -> running.fraction.coerceIn(0f, 1f)
+        else -> 0f
     }
-    val detail = when (update.stage) {
-        AudioTranscriptionStage.MODEL ->
-            if (update.stageFraction >= 1f) {
+    val stageTitle = when {
+        completed -> "Конспект готов"
+        failed != null -> "Ошибка"
+        running?.stage == AudioTranscriptionStage.MODEL -> "Загружаем модель GigaAM"
+        running?.stage == AudioTranscriptionStage.PREPARING -> "Подготавливаем аудио"
+        running?.stage == AudioTranscriptionStage.RECOGNIZING -> "Расшифровываем лекцию"
+        running?.stage == AudioTranscriptionStage.FINALIZING -> "Собираем конспект"
+        else -> "Подготавливаем аудио"
+    }
+    val detail = when {
+        completed -> "Сохраняем результат…"
+        failed != null -> failed.message
+        running == null -> "Читаем аудиодорожку…"
+        running.stage == AudioTranscriptionStage.MODEL ->
+            if (running.stageFraction >= 1f) {
                 "Модель готова, загружаем её в память…"
             } else {
-                "Скачано ${(update.stageFraction * 100).toInt()}% модели"
+                "Скачано ${(running.stageFraction * 100).toInt()}% модели"
             }
-        AudioTranscriptionStage.PREPARING ->
-            if (update.totalSeconds > 0) {
-                "Длительность: ${formatDuration(update.totalSeconds)}"
+        running.stage == AudioTranscriptionStage.PREPARING ->
+            if (running.totalSeconds > 0) {
+                "Длительность: ${formatDuration(running.totalSeconds)}"
             } else {
                 "Читаем аудиодорожку…"
             }
-        AudioTranscriptionStage.RECOGNIZING -> {
-            val processed = formatDuration(update.processedSeconds)
-            val total = if (update.totalSeconds > 0) {
-                " из ${formatDuration(update.totalSeconds)}"
+        running.stage == AudioTranscriptionStage.RECOGNIZING -> {
+            val processed = formatDuration(running.processedSeconds)
+            val total = if (running.totalSeconds > 0) {
+                " из ${formatDuration(running.totalSeconds)}"
             } else {
                 ""
             }
-            val eta = update.etaSeconds?.let { " · осталось ~${formatEta(it)}" }.orEmpty()
+            val eta = running.etaSeconds?.let { " · осталось ~${formatEta(it)}" }.orEmpty()
             "Обработано $processed$total$eta"
         }
-        AudioTranscriptionStage.FINALIZING ->
-            "Структурируем тезисы и сохраняем конспект"
+        else -> "Структурируем тезисы и сохраняем конспект"
     }
 
     Column(
@@ -167,10 +137,16 @@ fun ImportAudioScreen(
             )
         )
 
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 24.dp),
+                .verticalScroll(rememberScrollState()),
+            contentAlignment = Alignment.Center
+        ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -202,18 +178,19 @@ fun ImportAudioScreen(
                         Icon(
                             imageVector = Icons.Rounded.AudioFile,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = if (failed == null) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.error,
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(Modifier.size(8.dp))
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = if (error == null) "Офлайн-распознавание" else "Ошибка",
+                                text = if (failed == null) "Офлайн-распознавание" else "Ошибка",
                                 style = MaterialTheme.typography.titleSmall,
-                                color = if (error == null) MaterialTheme.colorScheme.onSurface
+                                color = if (failed == null) MaterialTheme.colorScheme.onSurface
                                 else MaterialTheme.colorScheme.error
                             )
-                            if (error == null) {
+                            if (failed == null) {
                                 Spacer(Modifier.height(2.dp))
                                 Text(
                                     text = stageTitle,
@@ -222,8 +199,7 @@ fun ImportAudioScreen(
                                 )
                             }
                         }
-                        Spacer(Modifier.weight(1f))
-                        if (error == null) {
+                        if (failed == null) {
                             Text(
                                 text = "${(progress * 100).toInt()}%",
                                 style = MaterialTheme.typography.titleMedium,
@@ -232,7 +208,7 @@ fun ImportAudioScreen(
                         }
                     }
                     Spacer(Modifier.height(14.dp))
-                    if (error == null) {
+                    if (failed == null) {
                         LinearProgressIndicator(
                             progress = { progress },
                             modifier = Modifier
@@ -252,13 +228,17 @@ fun ImportAudioScreen(
                         )
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            text = "Обработка идёт на телефоне. Прогресс рассчитан по длительности аудио.",
+                            text = if (running != null) {
+                                "Можно вернуться назад: обработка продолжится в фоне."
+                            } else {
+                                "Обработка идёт на телефоне. Прогресс рассчитан по длительности аудио."
+                            },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     } else {
                         Text(
-                            text = error.orEmpty(),
+                            text = failed.message,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.error
                         )
@@ -286,6 +266,7 @@ fun ImportAudioScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
+        }
         }
     }
 }

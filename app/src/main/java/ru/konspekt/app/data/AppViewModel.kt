@@ -1,11 +1,18 @@
 package ru.konspekt.app.data
 
 import android.app.Application
+import android.net.Uri
 import ru.konspekt.app.BuildConfig
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import ru.konspekt.app.recording.AudioFileTranscriber
+import ru.konspekt.app.recording.AudioTranscriptionProgress
+import ru.konspekt.app.recording.AudioTranscriptionStage
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -37,6 +44,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     var hasDeepSeekKey by mutableStateOf(apiKeyStore.hasKey())
         private set
+
+    var audioImport by mutableStateOf<AudioImportState>(AudioImportState.Idle)
+        private set
+
+    var importScreenVisible by mutableStateOf(false)
+        private set
+
+    private var audioImportJob: Job? = null
 
     fun updateSettings(transform: (UserSettings) -> UserSettings) {
         settings = transform(settings)
@@ -87,6 +102,75 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun clearDeepSeekKey() {
         apiKeyStore.clear()
         hasDeepSeekKey = false
+    }
+
+    fun startAudioImport(subjectId: String, topic: String, uri: Uri) {
+        if (audioImport is AudioImportState.Running) {
+            importScreenVisible = true
+            return
+        }
+        audioImportJob?.cancel()
+        importScreenVisible = true
+        audioImport = AudioImportState.Running(
+            subjectId = subjectId,
+            topic = topic,
+            progress = AudioTranscriptionProgress(
+                stage = AudioTranscriptionStage.MODEL,
+                fraction = 0f
+            )
+        )
+
+        audioImportJob = viewModelScope.launch {
+            runCatching {
+                val transcription = AudioFileTranscriber.transcribe(
+                    context = getApplication(),
+                    uri = uri
+                ) { progress ->
+                    val current = audioImport
+                    if (current is AudioImportState.Running) {
+                        audioImport = current.copy(progress = progress)
+                    }
+                }
+                if (transcription.lines.isEmpty()) {
+                    error("Речь не распознана. Попробуйте файл с более чистым звуком.")
+                }
+                val durationMinutes = ((transcription.durationSeconds + 59) / 60)
+                    .coerceAtLeast(1)
+                generateNote(
+                    subjectId = subjectId,
+                    topic = topic,
+                    transcript = transcription.lines,
+                    durationMinutes = durationMinutes,
+                    demo = false
+                )
+            }.onSuccess { result ->
+                audioImport = AudioImportState.Completed(
+                    subjectId = subjectId,
+                    topic = topic,
+                    noteId = result.noteId,
+                    warning = result.warning
+                )
+            }.onFailure { error ->
+                audioImport = AudioImportState.Failed(
+                    subjectId = subjectId,
+                    topic = topic,
+                    message = error.message ?: "Не удалось обработать лекцию"
+                )
+            }
+        }
+    }
+
+    fun hideImportScreen() {
+        importScreenVisible = false
+    }
+
+    fun showImportScreen() {
+        if (audioImport !is AudioImportState.Idle) importScreenVisible = true
+    }
+
+    fun consumeAudioImport() {
+        audioImport = AudioImportState.Idle
+        importScreenVisible = false
     }
 
     suspend fun generateNote(

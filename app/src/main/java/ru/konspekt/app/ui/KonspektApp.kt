@@ -49,6 +49,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -71,8 +72,10 @@ import androidx.navigation.navArgument
 import kotlinx.coroutines.launch
 import ru.konspekt.app.BuildConfig
 import ru.konspekt.app.data.AppViewModel
+import ru.konspekt.app.data.AudioImportState
 import ru.konspekt.app.data.SpeechEngine
 import ru.konspekt.app.pdf.PdfExporter
+import ru.konspekt.app.ui.components.ImportProgressBanner
 import ru.konspekt.app.ui.components.NewRecordingSheet
 import ru.konspekt.app.ui.components.rememberHaptics
 import ru.konspekt.app.ui.screens.about.AboutScreen
@@ -93,12 +96,6 @@ private data class BottomDestination(
     val icon: ImageVector
 )
 
-private data class ImportRequest(
-    val subjectId: String,
-    val topic: String,
-    val uri: Uri
-)
-
 private val bottomDestinations = listOf(
     BottomDestination("home", "Главная", Icons.Rounded.Home),
     BottomDestination("subjects", "Предметы", Icons.Rounded.GridView),
@@ -117,11 +114,12 @@ fun KonspektApp(viewModel: AppViewModel) {
     val isRoot = currentRoute == null || currentRoute in bottomDestinations.map { it.route }
 
     var showRecordingSheet by remember { mutableStateOf(false) }
-    var importRequest by remember { mutableStateOf<ImportRequest?>(null) }
     var preselectedSubject by remember { mutableStateOf<String?>(null) }
     var pendingRecordSubject by remember { mutableStateOf<String?>(null) }
     var exportingNoteIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var batchExportRunning by remember { mutableStateOf(false) }
+    val audioImportState = viewModel.audioImport
+    val importScreenVisible = viewModel.importScreenVisible
 
     val microphonePermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -251,36 +249,65 @@ fun KonspektApp(viewModel: AppViewModel) {
         exportNext()
     }
 
-    val activeImport = importRequest
-    if (activeImport != null) {
-        val importSubject = viewModel.subject(activeImport.subjectId)
+    val completedImport = audioImportState as? AudioImportState.Completed
+    val failedImport = audioImportState as? AudioImportState.Failed
+
+    LaunchedEffect(completedImport?.noteId, importScreenVisible) {
+        val completed = completedImport ?: return@LaunchedEffect
+        if (importScreenVisible) return@LaunchedEffect
+        val result = snackbarHostState.showSnackbar(
+            message = "Конспект готов",
+            actionLabel = "Открыть",
+            duration = SnackbarDuration.Long
+        )
+        viewModel.consumeAudioImport()
+        completed.warning?.let { message(it) }
+        if (result == SnackbarResult.ActionPerformed) {
+            navController.navigate("note/${completed.noteId}") {
+                launchSingleTop = true
+            }
+        }
+    }
+
+    LaunchedEffect(failedImport?.message, importScreenVisible) {
+        val failed = failedImport ?: return@LaunchedEffect
+        if (importScreenVisible) return@LaunchedEffect
+        message(failed.message)
+        viewModel.consumeAudioImport()
+    }
+
+    if (importScreenVisible && audioImportState !is AudioImportState.Idle) {
+        val state = audioImportState
+        val subjectId = when (state) {
+            is AudioImportState.Running -> state.subjectId
+            is AudioImportState.Completed -> state.subjectId
+            is AudioImportState.Failed -> state.subjectId
+            AudioImportState.Idle -> ""
+        }
+        val topic = when (state) {
+            is AudioImportState.Running -> state.topic
+            is AudioImportState.Completed -> state.topic
+            is AudioImportState.Failed -> state.topic
+            AudioImportState.Idle -> ""
+        }
+        val importSubject = viewModel.subject(subjectId) ?: viewModel.subjects.firstOrNull()
         if (importSubject != null) {
             ImportAudioScreen(
                 subject = importSubject,
-                topic = activeImport.topic,
-                uri = activeImport.uri,
-                onClose = { importRequest = null },
-                onFinish = { lines, duration ->
-                    viewModel.generateNote(
-                        subjectId = importSubject.id,
-                        topic = activeImport.topic,
-                        transcript = lines,
-                        // AudioFileTranscriber returns seconds, while notes store minutes.
-                        durationMinutes = ((duration + 59) / 60).coerceAtLeast(1),
-                        demo = false
-                    )
-                },
-                onCompleted = { result ->
-                    importRequest = null
-                    navController.navigate("note/${result.noteId}") {
+                topic = topic,
+                state = state,
+                onClose = viewModel::hideImportScreen,
+                onCompleted = { completed ->
+                    viewModel.consumeAudioImport()
+                    navController.navigate("note/${completed.noteId}") {
                         launchSingleTop = true
                     }
-                    result.warning?.let(::message)
+                    completed.warning?.let(::message)
                 }
             )
             return
         } else {
-            importRequest = null
+            viewModel.consumeAudioImport()
         }
     }
 
@@ -288,35 +315,44 @@ fun KonspektApp(viewModel: AppViewModel) {
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
-            if (isRoot) {
-                NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer
-                ) {
-                    bottomDestinations.forEach { destination ->
-                        NavigationBarItem(
-                            selected = currentRoute == destination.route,
-                            onClick = { navigateTab(destination.route) },
-                            icon = {
-                                Icon(
-                                    imageVector = destination.icon,
-                                    contentDescription = destination.label,
-                                    modifier = Modifier.size(24.dp)
+            Column {
+                val runningImport = audioImportState as? AudioImportState.Running
+                if (runningImport != null && !importScreenVisible) {
+                    ImportProgressBanner(
+                        state = runningImport,
+                        onClick = viewModel::showImportScreen
+                    )
+                }
+                if (isRoot) {
+                    NavigationBar(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainer
+                    ) {
+                        bottomDestinations.forEach { destination ->
+                            NavigationBarItem(
+                                selected = currentRoute == destination.route,
+                                onClick = { navigateTab(destination.route) },
+                                icon = {
+                                    Icon(
+                                        imageVector = destination.icon,
+                                        contentDescription = destination.label,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                },
+                                label = {
+                                    Text(
+                                        text = destination.label,
+                                        style = MaterialTheme.typography.labelMedium
+                                    )
+                                },
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                                    indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                            },
-                            label = {
-                                Text(
-                                    text = destination.label,
-                                    style = MaterialTheme.typography.labelMedium
-                                )
-                            },
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                                selectedTextColor = MaterialTheme.colorScheme.onSurface,
-                                indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
-                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                        )
+                        }
                     }
                 }
             }
@@ -587,7 +623,7 @@ fun KonspektApp(viewModel: AppViewModel) {
             },
             onImportAudio = { subjectId, topic, uri ->
                 showRecordingSheet = false
-                importRequest = ImportRequest(subjectId, topic, uri)
+                viewModel.startAudioImport(subjectId, topic, uri)
             },
             onDismiss = { showRecordingSheet = false },
             onStart = { subjectId, topic ->
