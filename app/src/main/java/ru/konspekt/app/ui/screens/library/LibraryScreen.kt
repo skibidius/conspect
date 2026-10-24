@@ -31,6 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,7 +44,9 @@ import androidx.compose.ui.unit.dp
 import ru.konspekt.app.data.Note
 import ru.konspekt.app.data.Subject
 import ru.konspekt.app.ui.components.EmptyState
-import ru.konspekt.app.ui.components.NoteRow
+import ru.konspekt.app.ui.components.NoteSelectionTopBar
+import ru.konspekt.app.ui.components.SwipeableNoteRow
+import ru.konspekt.app.ui.components.rememberNoteSelectionState
 import ru.konspekt.app.ui.components.UserAvatar
 import ru.konspekt.app.ui.components.rememberHaptics
 import ru.konspekt.app.ui.theme.LocalKonspektDark
@@ -56,6 +59,9 @@ fun LibraryScreen(
     subjects: List<Subject>,
     onOpenNote: (String) -> Unit,
     onDeleteNote: (String) -> Unit,
+    onDeleteNotes: (List<String>) -> Unit,
+    onSharePdf: (String) -> Unit,
+    onExportNotes: (List<String>) -> Unit,
     onSearch: () -> Unit,
     onTrash: () -> Unit,
     trashCount: Int,
@@ -65,12 +71,31 @@ fun LibraryScreen(
     var selectedSubject by remember { mutableStateOf<String?>(null) }
     var newestFirst by remember { mutableStateOf(true) }
     val haptics = rememberHaptics()
+    val selection = rememberNoteSelectionState()
 
     val filtered = notes
         .filter { selectedSubject == null || it.subjectId == selectedSubject }
         .let { list -> if (newestFirst) list.sortedByDescending { it.createdAt } else list.sortedByDescending { it.durationMinutes } }
 
+    LaunchedEffect(filtered.map { it.id }) {
+        selection.retainExisting(filtered.map { it.id })
+    }
+
+    fun finishSelection(action: (List<String>) -> Unit) {
+        val ids = selection.selectedIds.toList()
+        selection.clear()
+        if (ids.isNotEmpty()) action(ids)
+    }
+
     Column(modifier = modifier.fillMaxWidth()) {
+        if (selection.isActive) {
+            NoteSelectionTopBar(
+                count = selection.count,
+                onClear = selection::clear,
+                onExport = { finishSelection(onExportNotes) },
+                onDelete = { finishSelection(onDeleteNotes) }
+            )
+        } else {
         TopAppBar(
             title = { Text("Библиотека") },
             actions = {
@@ -109,6 +134,7 @@ fun LibraryScreen(
                 containerColor = MaterialTheme.colorScheme.surface
             )
         )
+        }
 
         LazyColumn(
             modifier = Modifier
@@ -219,11 +245,13 @@ fun LibraryScreen(
         } else {
             items(filtered, key = { it.id }) { note ->
                 val subject = subjects.firstOrNull { it.id == note.subjectId } ?: return@items
-                NoteRow(
+                SwipeableNoteRow(
                     note = note,
                     subject = subject,
+                    selection = selection,
                     onClick = { onOpenNote(note.id) },
-                    onLongClick = { onDeleteNote(note.id) },
+                    onSharePdf = { onSharePdf(note.id) },
+                    onDelete = { onDeleteNote(note.id) },
                     modifier = Modifier.animateItem().padding(bottom = 10.dp)
                 )
             }

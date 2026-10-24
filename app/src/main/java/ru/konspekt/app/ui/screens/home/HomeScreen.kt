@@ -28,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
@@ -36,7 +37,9 @@ import androidx.compose.ui.unit.sp
 import ru.konspekt.app.data.Note
 import ru.konspekt.app.data.Subject
 import ru.konspekt.app.ui.components.EmptyState
-import ru.konspekt.app.ui.components.NoteRow
+import ru.konspekt.app.ui.components.NoteSelectionTopBar
+import ru.konspekt.app.ui.components.SwipeableNoteRow
+import ru.konspekt.app.ui.components.rememberNoteSelectionState
 import ru.konspekt.app.ui.components.SectionHeader
 import ru.konspekt.app.ui.components.UserAvatar
 import ru.konspekt.app.ui.components.rememberHaptics
@@ -55,6 +58,9 @@ fun HomeScreen(
     notesCount: (String) -> Int,
     onOpenNote: (String) -> Unit,
     onDeleteNote: (String) -> Unit,
+    onDeleteNotes: (List<String>) -> Unit,
+    onSharePdf: (String) -> Unit,
+    onExportNotes: (List<String>) -> Unit,
     onOpenSubject: (String) -> Unit,
     onAllSubjects: () -> Unit,
     onAllNotes: () -> Unit,
@@ -65,8 +71,28 @@ fun HomeScreen(
 ) {
     val dateText = rememberDateText()
     val haptics = rememberHaptics()
+    val selection = rememberNoteSelectionState()
+    val recent = notes.take(4)
+
+    LaunchedEffect(recent.map { it.id }) {
+        selection.retainExisting(recent.map { it.id })
+    }
+
+    fun finishSelection(action: (List<String>) -> Unit) {
+        val ids = selection.selectedIds.toList()
+        selection.clear()
+        if (ids.isNotEmpty()) action(ids)
+    }
 
     Column(modifier = modifier.fillMaxWidth()) {
+        if (selection.isActive) {
+            NoteSelectionTopBar(
+                count = selection.count,
+                onClear = selection::clear,
+                onExport = { finishSelection(onExportNotes) },
+                onDelete = { finishSelection(onDeleteNotes) }
+            )
+        } else {
         TopAppBar(
             title = {
                 Text("Conspect", style = MaterialTheme.typography.titleLarge)
@@ -95,6 +121,7 @@ fun HomeScreen(
                 containerColor = MaterialTheme.colorScheme.surface
             )
         )
+        }
 
         LazyColumn(
             modifier = Modifier
@@ -188,14 +215,16 @@ fun HomeScreen(
                     )
                 }
             } else {
-                items(notes.take(4), key = { it.id }) { note ->
+                items(recent, key = { it.id }) { note ->
                     val subject = subjects.firstOrNull { it.id == note.subjectId }
                     if (subject != null) {
-                        NoteRow(
+                        SwipeableNoteRow(
                             note = note,
                             subject = subject,
+                            selection = selection,
                             onClick = { onOpenNote(note.id) },
-                            onLongClick = { onDeleteNote(note.id) },
+                            onSharePdf = { onSharePdf(note.id) },
+                            onDelete = { onDeleteNote(note.id) },
                             modifier = Modifier.animateItem().padding(bottom = 10.dp)
                         )
                     }

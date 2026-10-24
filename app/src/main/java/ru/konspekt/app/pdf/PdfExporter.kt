@@ -2,24 +2,18 @@ package ru.konspekt.app.pdf
 
 import android.content.ContentValues
 import android.content.Context
-import android.content.ContextWrapper
 import android.content.Intent
-import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.Rect
+import android.graphics.RectF
+import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import android.os.Build
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
-import android.view.View
-import android.view.ViewGroup
-import android.webkit.WebView
-import android.webkit.WebViewClient
-import android.widget.FrameLayout
 import androidx.core.content.FileProvider
 import ru.konspekt.app.data.Note
 import ru.konspekt.app.data.SectionKind
@@ -31,106 +25,37 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Builds a print-quality PDF completely on device.
- * HTML + bundled KaTeX renders formulas; the rendered page is sliced into A4 pages.
+ * Builds a print-quality, text-based PDF entirely on device.
+ *
+ * Text is drawn with PdfDocument's canvas rather than a screenshot, so every
+ * word can be selected and copied in a PDF reader. Formulas stay in readable
+ * LaTeX form and are also copyable.
  */
 object PdfExporter {
-    private var activeView: WebView? = null
-
     fun export(
         context: Context,
         note: Note,
         subject: Subject,
+        shareAfter: Boolean = true,
         onResult: (File?, String) -> Unit
     ) {
-        val activity = context.findActivity()
-        val density = context.resources.displayMetrics.density
-        val initialWidth = (794f * density).toInt().coerceAtLeast(800)
-        val webView = WebView(context).apply {
-            settings.javaScriptEnabled = true
-            settings.allowFileAccess = true
-            settings.allowContentAccess = true
-            settings.domStorageEnabled = true
-            settings.useWideViewPort = true
-            settings.loadWithOverviewMode = false
-            setBackgroundColor(Color.WHITE)
-            setLayerType(View.LAYER_TYPE_SOFTWARE, null)
-            layoutParams = FrameLayout.LayoutParams(initialWidth, 1800)
-            translationX = -4000f
-            translationY = -4000f
-        }
-        activeView = webView
-
-        webView.webViewClient = object : WebViewClient() {
-            override fun onPageFinished(view: WebView, url: String?) {
-                Handler(Looper.getMainLooper()).postDelayed({
-                    buildPdf(context, view, note, subject, onResult)
-                }, 900)
+        Thread {
+            val main = Handler(Looper.getMainLooper())
+            val file = try {
+                buildPdf(context, note, subject)
+            } catch (e: Exception) {
+                main.post { onResult(null, "Не удалось сохранить PDF") }
+                return@Thread
             }
-        }
-
-        val root = activity?.window?.decorView as? ViewGroup
-        if (root != null) {
-            root.addView(webView)
-        }
-        webView.measure(
-            View.MeasureSpec.makeMeasureSpec(initialWidth, View.MeasureSpec.EXACTLY),
-            View.MeasureSpec.makeMeasureSpec(1800, View.MeasureSpec.EXACTLY)
-        )
-        webView.layout(0, 0, initialWidth, 1800)
-
-        webView.loadDataWithBaseURL(
-            "file:///android_asset/katex/",
-            buildHtml(note, subject),
-            "text/html",
-            "UTF-8",
-            null
-        )
+            val saved = copyToDownloads(context, file, file.name)
+            main.post {
+                onResult(file, if (saved) "PDF сохранён в Загрузки" else "PDF готов")
+                if (shareAfter) share(context, file)
+            }
+        }.start()
     }
 
-    private fun buildPdf(
-        context: Context,
-        webView: WebView,
-        note: Note,
-        subject: Subject,
-        onResult: (File?, String) -> Unit
-    ) {
-        val density = context.resources.displayMetrics.density
-        webView.evaluateJavascript(
-            "(function(){var d=document.documentElement;return Math.ceil(Math.max(d.scrollHeight, document.body.scrollHeight));})()"
-        ) { raw ->
-            val cssHeight = raw?.trim('"')?.toFloatOrNull()?.coerceAtLeast(500f) ?: 0f
-            if (cssHeight <= 0f) {
-                cleanup(webView)
-                onResult(null, "Не удалось измерить конспект")
-                return@evaluateJavascript
-            }
-            val viewWidth = (794f * density).toInt().coerceAtLeast(800)
-            val viewHeight = (cssHeight * density).toInt().coerceIn(1200, 36000)
-            webView.layoutParams = FrameLayout.LayoutParams(viewWidth, viewHeight)
-            webView.measure(
-                View.MeasureSpec.makeMeasureSpec(viewWidth, View.MeasureSpec.EXACTLY),
-                View.MeasureSpec.makeMeasureSpec(viewHeight, View.MeasureSpec.EXACTLY)
-            )
-            webView.layout(0, 0, viewWidth, viewHeight)
-
-            Handler(Looper.getMainLooper()).postDelayed({
-                try {
-                    renderPdf(context, webView, note, onResult)
-                } catch (e: Exception) {
-                    cleanup(webView)
-                    onResult(null, "Не удалось сохранить PDF")
-                }
-            }, 350)
-        }
-    }
-
-    private fun renderPdf(
-        context: Context,
-        webView: WebView,
-        note: Note,
-        onResult: (File?, String) -> Unit
-    ) {
+    private fun buildPdf(context: Context, note: Note, subject: Subject): File {
         val dir = File(context.cacheDir, "exports").apply { mkdirs() }
         val stamp = SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(Date())
         val safeTitle = note.title
@@ -140,55 +65,331 @@ object PdfExporter {
             .ifBlank { "konspekt" }
         val file = File(dir, "$safeTitle-$stamp.pdf")
 
-        // A4 in PDF points.
-        val pageWidth = 595
-        val pageHeight = 842
-        val margin = 42
-        val contentWidth = pageWidth - margin * 2
-        val contentHeight = pageHeight - margin * 2
-        val viewWidth = webView.width.coerceAtLeast(1)
-        val viewHeight = webView.height.coerceAtLeast(1)
-        val scale = contentWidth.toFloat() / viewWidth.toFloat()
-
-        // Draw the fully laid-out WebView once into a bitmap and then slice it.
-        // This keeps WebView rendering independent from PDF canvas transforms.
-        val bitmap = Bitmap.createBitmap(viewWidth, viewHeight, Bitmap.Config.ARGB_8888)
-        val bitmapCanvas = Canvas(bitmap)
-        bitmapCanvas.drawColor(Color.WHITE)
-        webView.draw(bitmapCanvas)
         val document = PdfDocument()
-        var sourceTop = 0
-        var pageNumber = 1
-        while (sourceTop < viewHeight) {
-            val sourceBottom = (sourceTop + (contentHeight / scale).toInt()).coerceAtMost(viewHeight)
-            val src = Rect(0, sourceTop, viewWidth, sourceBottom)
-            val dstHeight = ((sourceBottom - sourceTop) * scale).toInt().coerceAtLeast(1)
-            val pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber).create()
-            val page = document.startPage(pageInfo)
-            val canvas = page.canvas
-            canvas.drawColor(Color.WHITE)
-            canvas.drawBitmap(
-                bitmap,
-                src,
-                Rect(margin, margin, margin + contentWidth, margin + dstHeight),
-                Paint(Paint.FILTER_BITMAP_FLAG)
-            )
-            document.finishPage(page)
-            sourceTop = sourceBottom
-            pageNumber += 1
-        }
-
+        val writer = TextWriter(document, note, subject)
+        writer.render()
         try {
             FileOutputStream(file).use { document.writeTo(it) }
         } finally {
             document.close()
-            bitmap.recycle()
-            cleanup(webView)
+        }
+        return file
+    }
+
+    private class TextWriter(
+        private val document: PdfDocument,
+        private val note: Note,
+        private val subject: Subject
+    ) {
+        private val pageWidth = 595
+        private val pageHeight = 842
+        private val margin = 46f
+        private val contentWidth = pageWidth - margin * 2
+        private val bottom = pageHeight - margin
+        private var pageNumber = 0
+        private var page: PdfDocument.Page? = null
+        private lateinit var canvas: Canvas
+        private var y = 0f
+
+        private val ink = Color.rgb(27, 30, 24)
+        private val bodyInk = Color.rgb(52, 58, 50)
+        private val muted = Color.rgb(112, 122, 110)
+        private val accent = Color.rgb(63, 99, 72)
+        private val accentLight = Color.rgb(237, 246, 232)
+        private val lineColor = Color.rgb(221, 228, 217)
+
+        private val titlePaint = paint(24f, ink, Typeface.BOLD)
+        private val subtitlePaint = paint(11f, muted)
+        private val bodyPaint = paint(10.5f, bodyInk)
+        private val smallPaint = paint(8.5f, muted)
+        private val labelPaint = paint(8f, accent, Typeface.BOLD)
+        private val headingPaint = paint(14f, ink, Typeface.BOLD)
+        private val kindPaint = paint(7.5f, accent, Typeface.BOLD)
+        private val formulaPaint = paint(9.5f, Color.rgb(52, 70, 54)).apply {
+            typeface = Typeface.MONOSPACE
+        }
+        private val formulaLabelPaint = paint(8f, muted).apply { textAlign = Paint.Align.CENTER }
+        private val bulletPaint = paint(10.5f, bodyInk)
+        private val summaryPaint = paint(10.5f, bodyInk)
+
+        fun render() {
+            newPage()
+            drawBrand()
+            drawHeader()
+            drawSummary()
+            note.sections.forEach { drawSection(it) }
+            if (note.skipped.isNotEmpty()) drawSkipped()
+            finishPage()
         }
 
-        val saved = copyToDownloads(context, file, file.name)
-        onResult(file, if (saved) "PDF сохранён в Загрузки" else "PDF готов")
-        share(context, file)
+        private fun newPage() {
+            finishPage()
+            pageNumber += 1
+            val info = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber).create()
+            page = document.startPage(info)
+            canvas = page!!.canvas
+            canvas.drawColor(Color.WHITE)
+            y = margin
+        }
+
+        private fun finishPage() {
+            page?.let { document.finishPage(it) }
+            page = null
+        }
+
+        private fun ensureSpace(height: Float) {
+            if (y + height > bottom) newPage()
+        }
+
+        private fun drawBrand() {
+            canvas.drawText("CONSPECT · ЛОКАЛЬНЫЙ КОНСПЕКТ", margin, y, paint(8f, accent, Typeface.BOLD))
+            y += 20f
+        }
+
+        private fun drawHeader() {
+            val date = SimpleDateFormat("d MMMM yyyy", Locale("ru")).format(Date(note.createdAt))
+            drawText(
+                subject.name,
+                paint(8.5f, accent, Typeface.BOLD)
+            )
+            y += 22f
+            drawWrapped(note.title, titlePaint, lineHeight = 29f)
+            if (note.subtitle.isNotBlank() && note.subtitle != subject.name) {
+                y += 2f
+                drawWrapped(note.subtitle, subtitlePaint, lineHeight = 16f)
+            }
+            y += 9f
+            canvas.drawLine(margin, y, pageWidth - margin, y, paint(0.7f, lineColor))
+            y += 13f
+            canvas.drawText(
+                "$date   ·   ${note.durationMinutes} мин записи   ·   ${note.wordCount} слов",
+                margin,
+                y,
+                smallPaint
+            )
+            y += 20f
+        }
+
+        private fun drawSummary() {
+            if (note.summary.isBlank()) return
+            val labelHeight = 18f
+            val padding = 14f
+            val lineHeight = 16f
+            val lines = wrap(note.summary, summaryPaint, contentWidth - padding * 2)
+            val boxHeight = padding * 2 + labelHeight + lines.size * lineHeight
+            ensureSpace(boxHeight + 14f)
+            val top = y
+            canvas.drawRoundRect(
+                RectF(margin, top, pageWidth - margin, top + boxHeight),
+                12f,
+                12f,
+                paint(1f, accentLight).apply { style = Paint.Style.FILL }
+            )
+            canvas.drawText("КОРОТКО", margin + padding, top + padding + 7f, labelPaint)
+            var textY = top + padding + labelHeight + 8f
+            lines.forEach { line ->
+                canvas.drawText(line, margin + padding, textY, summaryPaint)
+                textY += lineHeight
+            }
+            y = top + boxHeight + 20f
+        }
+
+        private fun drawSection(section: ru.konspekt.app.data.NoteSection) {
+            ensureSpace(58f)
+            val kind = when (section.kind) {
+                SectionKind.DEFINITION -> "ОПРЕДЕЛЕНИЕ"
+                SectionKind.THEOREM -> "ТЕОРЕМА"
+                SectionKind.EXAMPLE -> "ПРИМЕР"
+                SectionKind.SUMMARY -> "ИТОГ"
+                SectionKind.TEXT -> ""
+            }
+            if (kind.isNotBlank()) {
+                canvas.drawText(kind, margin, y, kindPaint)
+                y += 12f
+            }
+            drawWrapped(section.title, headingPaint, lineHeight = 19f)
+            y += 4f
+            val body = withoutKeyTerms(section.body)
+            if (body.isNotBlank()) {
+                drawWrapped(body, bodyPaint, lineHeight = 15.5f)
+                y += 3f
+            }
+            section.formula?.let { formula ->
+                drawFormula(formula, section.formulaLabel)
+            }
+            val bullets = section.bullets
+                .map(::withoutKeyTerms)
+                .filter { it.isNotBlank() }
+            if (bullets.isNotEmpty()) {
+                bullets.forEach { bullet ->
+                    drawBullet(bullet)
+                }
+                y += 2f
+            }
+            y += 14f
+        }
+
+        private fun drawFormula(formula: String, label: String?) {
+            val padding = 10f
+            val displayFormula = prettyFormula(formula)
+            val lines = wrap(displayFormula, formulaPaint, contentWidth - padding * 2)
+            val boxHeight = lines.size * 14f + padding * 2
+            ensureSpace(boxHeight + 18f)
+            val top = y
+            canvas.drawRoundRect(
+                RectF(margin, top, pageWidth - margin, top + boxHeight),
+                9f,
+                9f,
+                paint(1f, Color.rgb(242, 246, 239)).apply { style = Paint.Style.FILL }
+            )
+            var textY = top + padding + 10f
+            lines.forEach { line ->
+                val width = formulaPaint.measureText(line)
+                canvas.drawText(line, margin + (contentWidth - width) / 2f, textY, formulaPaint)
+                textY += 14f
+            }
+            y = top + boxHeight + 4f
+            if (!label.isNullOrBlank()) {
+                ensureSpace(24f)
+                canvas.drawText(label, pageWidth / 2f, y + 9f, formulaLabelPaint)
+                y += 24f
+            }
+        }
+
+        private fun drawBullet(text: String) {
+            val bulletIndent = 12f
+            val lineHeight = 15.5f
+            val lines = wrap(text, bulletPaint, contentWidth - bulletIndent)
+            ensureSpace(lineHeight + 2f)
+            canvas.drawCircle(margin + 3f, y - 3.4f, 2.2f, paint(1f, accent).apply {
+                style = Paint.Style.FILL
+            })
+            lines.forEach { line ->
+                ensureSpace(lineHeight)
+                canvas.drawText(line, margin + bulletIndent, y, bulletPaint)
+                y += lineHeight
+            }
+            y += 2f
+        }
+
+        private fun drawSkipped() {
+            ensureSpace(60f)
+            y += 8f
+            canvas.drawLine(margin, y, pageWidth - margin, y, paint(0.7f, lineColor))
+            y += 18f
+            drawWrapped("Отступления преподавателя", headingPaint, lineHeight = 19f)
+            y += 2f
+            drawWrapped("Скрыто фрагментов: ${note.skipped.size}", smallPaint, lineHeight = 14f)
+            y += 4f
+            note.skipped.forEach { fragment ->
+                ensureSpace(48f)
+                drawWrapped("${fragment.time}  ${fragment.quote}", bodyPaint, lineHeight = 14.5f)
+                drawWrapped(fragment.reason.uppercase(), smallPaint, lineHeight = 12f)
+                y += 4f
+            }
+        }
+
+        private fun drawText(text: String, paint: Paint) {
+            ensureSpace(paint.textSize + 4f)
+            canvas.drawText(text, margin, y, paint)
+            y += paint.textSize + 4f
+        }
+
+        private fun drawWrapped(text: String, paint: Paint, lineHeight: Float) {
+            text.split('\n').forEach { paragraph ->
+                if (paragraph.isBlank()) {
+                    y += lineHeight * 0.6f
+                    return@forEach
+                }
+                wrap(paragraph, paint, contentWidth).forEach { line ->
+                    ensureSpace(lineHeight)
+                    canvas.drawText(line, margin, y, paint)
+                    y += lineHeight
+                }
+            }
+        }
+
+        private fun prettyFormula(source: String): String {
+            var s = source.trim()
+            repeat(4) {
+                s = Regex("""\\frac\{([^{}]*)\}\{([^{}]*)\}""").replace(s, "($1)/($2)")
+                s = Regex("""\\sqrt\{([^{}]*)\}""").replace(s, "√($1)")
+            }
+            s = s.replace("\\left", "").replace("\\right", "")
+            listOf(
+                "\\Delta" to "Δ",
+                "\\delta" to "δ",
+                "\\alpha" to "α",
+                "\\beta" to "β",
+                "\\gamma" to "γ",
+                "\\lambda" to "λ",
+                "\\mu" to "μ",
+                "\\pi" to "π",
+                "\\sigma" to "σ",
+                "\\theta" to "θ",
+                "\\varphi" to "φ",
+                "\\phi" to "φ",
+                "\\omega" to "ω",
+                "\\infty" to "∞",
+                "\\cdot" to "·",
+                "\\times" to "×",
+                "\\div" to "÷",
+                "\\pm" to "±",
+                "\\le" to "≤",
+                "\\ge" to "≥",
+                "\\neq" to "≠",
+                "\\to" to "→",
+                "\\approx" to "≈",
+                "\\sum" to "Σ",
+                "\\int" to "∫"
+            ).forEach { (from, to) -> s = s.replace(from, to) }
+            listOf("sin", "cos", "tan", "log", "ln", "lim", "max", "min", "exp").forEach {
+                s = s.replace("\\$it", it)
+            }
+            s = Regex("""\\(?:text|mathrm|operatorname)\{([^{}]*)\}""").replace(s, "$1")
+            s = Regex("""_\{([^{}]*)\}""").replace(s, "_($1)")
+            s = Regex("""\^\{([^{}]*)\}""").replace(s, "^($1)")
+            s = s.replace("^{2}", "²").replace("^{3}", "³")
+            s = s.replace("\\,", " ").replace("\\;", " ").replace("\\!", "")
+            s = s.replace("Δ x", "Δx")
+            s = s.replace("{", "").replace("}", "")
+            return s.replace("  ", " ").trim()
+        }
+
+        private fun withoutKeyTerms(text: String): String =
+            text.lines()
+                .filterNot {
+                    val line = it.trim()
+                    line.startsWith("Ключевые понятия", ignoreCase = true) ||
+                        line.startsWith("Ключевые слова", ignoreCase = true)
+                }
+                .joinToString("\n")
+                .trim()
+
+        private fun wrap(text: String, paint: Paint, width: Float): List<String> {
+            if (text.isBlank()) return emptyList()
+            val result = mutableListOf<String>()
+            text.split('\n').forEach { paragraph ->
+                var remaining = paragraph.trim()
+                while (remaining.isNotEmpty()) {
+                    val count = paint.breakText(remaining, true, width, null)
+                    if (count <= 0) break
+                    var cut = count
+                    while (cut > 0 && cut < remaining.length && remaining[cut] != ' ') cut--
+                    if (cut <= 0 || cut == remaining.length) cut = count
+                    result += remaining.substring(0, cut).trimEnd()
+                    remaining = remaining.substring(cut).trimStart()
+                }
+            }
+            return result
+        }
+
+        private fun paint(size: Float, color: Int, style: Int = Typeface.NORMAL): Paint =
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                textSize = size
+                this.color = color
+                typeface = Typeface.create("sans-serif", style)
+            }
     }
 
     private fun copyToDownloads(context: Context, file: File, name: String): Boolean {
@@ -228,158 +429,4 @@ object PdfExporter {
             context.startActivity(Intent.createChooser(intent, "Поделиться конспектом"))
         }
     }
-
-    private fun cleanup(webView: WebView) {
-        try {
-            (webView.parent as? ViewGroup)?.removeView(webView)
-            webView.destroy()
-        } catch (_: Exception) {
-        }
-        if (activeView === webView) activeView = null
-    }
-
-    private fun Context.findActivity(): android.app.Activity? {
-        var current = this
-        while (current is ContextWrapper) {
-            if (current is android.app.Activity) return current
-            current = current.baseContext
-        }
-        return null
-    }
-
-    private fun buildHtml(note: Note, subject: Subject): String {
-        val sections = note.sections.joinToString("\n") { section ->
-            val kind = when (section.kind) {
-                SectionKind.DEFINITION -> "Определение"
-                SectionKind.THEOREM -> "Теорема"
-                SectionKind.EXAMPLE -> "Пример"
-                SectionKind.SUMMARY -> "Итог"
-                SectionKind.TEXT -> ""
-            }
-            val kindBadge = if (kind.isBlank()) "" else "<div class=\"kind\">${kind.escapeHtml()}</div>"
-            val body = section.body.takeIf { it.isNotBlank() }?.let {
-                "<p>${it.escapeHtml()}</p>"
-            }.orEmpty()
-            val formula = section.formula?.let {
-                "<div class=\"formula\"><div class=\"math\" data-tex=\"${it.escapeAttr()}\"></div></div>" +
-                    (section.formulaLabel?.let { label ->
-                        "<div class=\"formula-label\">${label.escapeHtml()}</div>"
-                    }.orEmpty())
-            }.orEmpty()
-            val bullets = if (section.bullets.isEmpty()) "" else {
-                "<ul>" + section.bullets.joinToString("") { "<li>${it.escapeHtml()}</li>" } + "</ul>"
-            }
-            """
-            <section class="section">
-                $kindBadge
-                <h2>${section.title.escapeHtml()}</h2>
-                $body
-                $formula
-                $bullets
-            </section>
-            """.trimIndent()
-        }
-
-        val skipped = if (note.skipped.isEmpty()) "" else """
-            <section class="skipped">
-                <h2>Отступления преподавателя</h2>
-                <p class="muted">Скрыто фрагментов: ${note.skipped.size}</p>
-                ${note.skipped.joinToString("") { fragment ->
-                    "<div class=\"skipped-item\"><div class=\"time\">${fragment.time}</div>" +
-                        "<div><p>${fragment.quote.escapeHtml()}</p><span>${fragment.reason.escapeHtml()}</span></div></div>"
-                }}
-            </section>
-        """.trimIndent()
-
-        val terms = if (note.keyTerms.isEmpty()) "" else {
-            "<div class=\"terms\">" + note.keyTerms.joinToString("") {
-                "<span>${it.escapeHtml()}</span>"
-            } + "</div>"
-        }
-
-        val date = SimpleDateFormat("d MMMM yyyy", Locale("ru")).format(Date(note.createdAt))
-
-        return """
-            <!doctype html>
-            <html lang="ru">
-            <head>
-              <meta charset="utf-8">
-              <meta name="viewport" content="width=794, initial-scale=1.0">
-              <link rel="stylesheet" href="katex.min.css">
-              <style>
-                @page { size: A4; margin: 18mm 17mm 16mm; }
-                * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-                body {
-                  margin: 0; color: #1B1E18; background: #fff;
-                  font-family: Roboto, "Noto Sans", sans-serif; font-size: 10.5pt; line-height: 1.58;
-                }
-                .brand { display: flex; align-items: center; gap: 8px; color: #3F6348; font-size: 8pt; letter-spacing: 1.6px; text-transform: uppercase; font-weight: 700; }
-                .logo { width: 20px; height: 20px; border-radius: 7px; background: #3F6348; position: relative; }
-                .logo:after { content:""; position:absolute; left:5px; top:4px; width:10px; height:12px; border-radius:2px; background:#FBF9F4; }
-                .subject { margin-top: 18px; color: #4C6B52; font-size: 9.5pt; font-weight: 600; }
-                h1 { font-size: 27pt; line-height: 1.12; margin: 7px 0 8px; letter-spacing: -0.8px; color: #162018; }
-                .subtitle { color: #5B665A; font-size: 12pt; margin-bottom: 14px; }
-                .meta { display: flex; gap: 12px; color: #707A6E; font-size: 8.5pt; border-top: 1px solid #DDE4D9; border-bottom: 1px solid #DDE4D9; padding: 9px 0; }
-                .summary { margin-top: 18px; padding: 16px 18px; background: #EDF6E8; border-radius: 12px; }
-                .summary .label { color: #3F6348; font-size: 8pt; letter-spacing: 1.2px; text-transform: uppercase; font-weight: 700; margin-bottom: 6px; }
-                .summary p { margin: 0; font-size: 11pt; line-height: 1.55; }
-                .terms { margin: 12px 0 4px; display: flex; flex-wrap: wrap; gap: 6px; }
-                .terms span { border: 1px solid #CFD8CB; border-radius: 20px; padding: 3px 9px; font-size: 8pt; color: #52614F; }
-                .section { margin-top: 22px; page-break-inside: avoid; }
-                .section h2 { font-size: 14.5pt; line-height: 1.3; margin: 4px 0 7px; color: #1B241B; }
-                .kind { color: #4C6B52; font-size: 7.5pt; font-weight: 700; letter-spacing: 1.1px; text-transform: uppercase; }
-                p { margin: 0 0 8px; color: #343A32; }
-                ul { margin: 6px 0 4px; padding-left: 18px; color: #343A32; }
-                li { margin: 4px 0; }
-                .formula { margin: 12px 0 6px; padding: 15px 12px; border-radius: 10px; background: #F2F6EF; text-align: center; overflow: hidden; }
-                .formula .katex { font-size: 1.2em; }
-                .formula-label { text-align: center; color: #788176; font-size: 8pt; margin-bottom: 4px; }
-                .skipped { margin-top: 24px; padding: 15px 17px; background: #F7F3EA; border-radius: 12px; page-break-inside: avoid; }
-                .skipped h2 { font-size: 12pt; margin: 0 0 3px; color: #4F493A; }
-                .muted { color: #857D69; font-size: 8.5pt; margin: 0 0 9px; }
-                .skipped-item { display: flex; gap: 9px; border-top: 1px solid #E7E0D2; padding-top: 8px; margin-top: 8px; }
-                .skipped-item p { margin: 0 0 2px; font-size: 9pt; color: #625D50; font-style: italic; }
-                .skipped-item span { font-size: 7.5pt; color: #9A907A; text-transform: uppercase; letter-spacing: 0.7px; }
-                .time { font-size: 8pt; color: #857D69; min-width: 33px; }
-                .footer { margin-top: 28px; padding-top: 10px; border-top: 1px solid #DDE4D9; display: flex; justify-content: space-between; color: #8B9387; font-size: 7.5pt; letter-spacing: 0.3px; }
-              </style>
-            </head>
-            <body>
-              <div class="brand"><div class="logo"></div><span>CONSPECT · локальный AI-конспект</span></div>
-              <div class="subject">${subject.name.escapeHtml()}</div>
-              <h1>${note.title.escapeHtml()}</h1>
-              ${if (note.subtitle.isNotBlank()) "<div class=\"subtitle\">${note.subtitle.escapeHtml()}</div>" else ""}
-              <div class="meta">
-                <span>${date}</span><span>${note.durationMinutes} мин записи</span><span>${note.wordCount} слов</span>
-              </div>
-              <div class="summary">
-                <div class="label">Коротко</div>
-                <p>${note.summary.escapeHtml()}</p>
-              </div>
-              $terms
-              $sections
-              $skipped
-              <div class="footer"><span>Conspect · ${subject.shortName.escapeHtml()}</span><span>Создано на устройстве</span></div>
-              <script src="katex.min.js"></script>
-              <script>
-                document.querySelectorAll('[data-tex]').forEach(function (el) {
-                  try {
-                    katex.render(el.getAttribute('data-tex'), el, {displayMode: true, throwOnError: false, strict: false});
-                  } catch (e) { el.textContent = el.getAttribute('data-tex'); }
-                });
-              </script>
-            </body>
-            </html>
-        """.trimIndent()
-    }
-
-    private fun String.escapeHtml(): String = this
-        .replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-
-    private fun String.escapeAttr(): String = escapeHtml()
-        .replace("\"", "&quot;")
-        .replace("'", "&#39;")
-        .replace("\n", " ")
 }

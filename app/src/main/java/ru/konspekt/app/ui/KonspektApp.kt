@@ -1,6 +1,12 @@
 package ru.konspekt.app.ui
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -51,7 +57,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -64,6 +72,7 @@ import kotlinx.coroutines.launch
 import ru.konspekt.app.BuildConfig
 import ru.konspekt.app.data.AppViewModel
 import ru.konspekt.app.data.SpeechEngine
+import ru.konspekt.app.pdf.PdfExporter
 import ru.konspekt.app.ui.components.NewRecordingSheet
 import ru.konspekt.app.ui.components.rememberHaptics
 import ru.konspekt.app.ui.screens.home.HomeScreen
@@ -101,6 +110,7 @@ fun KonspektApp(viewModel: AppViewModel) {
     val navController = rememberNavController()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
     val isRoot = currentRoute == null || currentRoute in bottomDestinations.map { it.route }
@@ -108,10 +118,47 @@ fun KonspektApp(viewModel: AppViewModel) {
     var showRecordingSheet by remember { mutableStateOf(false) }
     var importRequest by remember { mutableStateOf<ImportRequest?>(null) }
     var preselectedSubject by remember { mutableStateOf<String?>(null) }
+    var pendingRecordSubject by remember { mutableStateOf<String?>(null) }
+
+    val microphonePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        val subjectId = pendingRecordSubject
+        pendingRecordSubject = null
+        if (granted) {
+            preselectedSubject = subjectId
+            showRecordingSheet = true
+        } else {
+            scope.launch {
+                val result = snackbarHostState.showSnackbar(
+                    message = "Без доступа к микрофону запись невозможна",
+                    actionLabel = "Настройки",
+                    duration = SnackbarDuration.Long
+                )
+                if (result == SnackbarResult.ActionPerformed) {
+                    context.startActivity(
+                        Intent(
+                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            Uri.parse("package:${context.packageName}")
+                        )
+                    )
+                }
+            }
+        }
+    }
 
     fun openRecording(subjectId: String? = null) {
-        preselectedSubject = subjectId
-        showRecordingSheet = true
+        val granted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+        if (granted) {
+            preselectedSubject = subjectId
+            showRecordingSheet = true
+        } else {
+            pendingRecordSubject = subjectId
+            microphonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
     }
 
     val haptics = rememberHaptics()
@@ -140,18 +187,59 @@ fun KonspektApp(viewModel: AppViewModel) {
         scope.launch { snackbarHostState.showSnackbar(text) }
     }
 
-    fun trashNote(id: String) {
-        viewModel.deleteNote(id)
+    fun trashNotes(ids: List<String>) {
+        val unique = ids.distinct()
+        if (unique.isEmpty()) return
+        unique.forEach(viewModel::deleteNote)
         scope.launch {
             val result = snackbarHostState.showSnackbar(
-                message = "Конспект в корзине",
+                message = if (unique.size == 1) "Конспект в корзине"
+                else "Конспектов в корзине: ${unique.size}",
                 actionLabel = "Вернуть",
                 duration = SnackbarDuration.Short
             )
             if (result == SnackbarResult.ActionPerformed) {
-                viewModel.restoreNote(id)
+                unique.forEach(viewModel::restoreNote)
             }
         }
+    }
+
+    fun trashNote(id: String) = trashNotes(listOf(id))
+
+    fun shareNotePdf(id: String) {
+        val note = viewModel.note(id) ?: return
+        val subject = viewModel.subject(note.subjectId) ?: return
+        PdfExporter.export(context, note, subject) { _, text ->
+            message(text)
+        }
+    }
+
+    fun exportNotesPdf(ids: List<String>) {
+        val items = ids.distinct().mapNotNull { id ->
+            val note = viewModel.note(id) ?: return@mapNotNull null
+            val subject = viewModel.subject(note.subjectId) ?: return@mapNotNull null
+            note to subject
+        }
+        if (items.isEmpty()) return
+        message("Экспортируем PDF: ${items.size}…")
+        var index = 0
+        var exported = 0
+        fun exportNext() {
+            if (index >= items.size) {
+                message(
+                    if (exported == 0) "Не удалось экспортировать PDF"
+                    else "PDF сохранены в Загрузки: $exported"
+                )
+                return
+            }
+            val (note, subject) = items[index]
+            index += 1
+            PdfExporter.export(context, note, subject, shareAfter = false) { file, _ ->
+                if (file != null) exported += 1
+                exportNext()
+            }
+        }
+        exportNext()
     }
 
     val activeImport = importRequest
@@ -276,6 +364,9 @@ fun KonspektApp(viewModel: AppViewModel) {
                     notesCount = viewModel::notesCount,
                     onOpenNote = { navController.navigate("note/$it") },
                     onDeleteNote = ::trashNote,
+                    onDeleteNotes = ::trashNotes,
+                    onSharePdf = ::shareNotePdf,
+                    onExportNotes = ::exportNotesPdf,
                     onOpenSubject = { navController.navigate("subject/$it") },
                     onAllSubjects = { navController.navigate("subjects") },
                     onAllNotes = { navController.navigate("library") },
@@ -309,6 +400,9 @@ fun KonspektApp(viewModel: AppViewModel) {
                     subjects = viewModel.subjects,
                     onOpenNote = { navController.navigate("note/$it") },
                     onDeleteNote = ::trashNote,
+                    onDeleteNotes = ::trashNotes,
+                    onSharePdf = ::shareNotePdf,
+                    onExportNotes = ::exportNotesPdf,
                     onSearch = { navController.navigate("search") },
                     onTrash = { navController.navigate("trash") },
                     trashCount = viewModel.trash.size,
@@ -322,6 +416,9 @@ fun KonspektApp(viewModel: AppViewModel) {
                     subjects = viewModel.subjects,
                     onOpenNote = { navController.navigate("note/$it") },
                     onDeleteNote = ::trashNote,
+                    onDeleteNotes = ::trashNotes,
+                    onSharePdf = ::shareNotePdf,
+                    onExportNotes = ::exportNotesPdf,
                     onOpenSubject = { navController.navigate("subject/$it") }
                 )
             }
@@ -374,6 +471,9 @@ fun KonspektApp(viewModel: AppViewModel) {
                         onBack = { navController.popBackStack() },
                         onOpenNote = { navController.navigate("note/$it") },
                         onDeleteNote = ::trashNote,
+                        onDeleteNotes = ::trashNotes,
+                        onSharePdf = ::shareNotePdf,
+                        onExportNotes = ::exportNotesPdf,
                         onRecord = { openRecording(subject.id) },
                         onUpdateSubject = { name, tone, icon ->
                             viewModel.updateSubject(subject.id, name, tone, icon)

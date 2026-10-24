@@ -50,7 +50,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ru.konspekt.app.data.Note
 import ru.konspekt.app.data.Subject
-import ru.konspekt.app.ui.components.NoteRow
+import ru.konspekt.app.ui.components.NoteSelectionTopBar
+import ru.konspekt.app.ui.components.SwipeableNoteRow
+import ru.konspekt.app.ui.components.rememberNoteSelectionState
 import ru.konspekt.app.ui.components.SectionHeader
 import ru.konspekt.app.ui.components.rememberHaptics
 import kotlinx.coroutines.delay
@@ -63,6 +65,9 @@ fun SearchScreen(
     subjects: List<Subject>,
     onOpenNote: (String) -> Unit,
     onDeleteNote: (String) -> Unit,
+    onDeleteNotes: (List<String>) -> Unit,
+    onSharePdf: (String) -> Unit,
+    onExportNotes: (List<String>) -> Unit,
     onOpenSubject: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -87,14 +92,34 @@ fun SearchScreen(
     }
 
     val suggestions = listOf("Производная", "Ньютон", "O(n log n)", "Present Perfect", "Жанна д’Арк")
+    val selection = rememberNoteSelectionState()
+
+    LaunchedEffect(results.map { it.id }) {
+        selection.retainExisting(results.map { it.id })
+    }
+
+    fun finishSelection(action: (List<String>) -> Unit) {
+        val ids = selection.selectedIds.toList()
+        selection.clear()
+        if (ids.isNotEmpty()) action(ids)
+    }
 
     Column(modifier = modifier.fillMaxSize()) {
+        if (selection.isActive) {
+            NoteSelectionTopBar(
+                count = selection.count,
+                onClear = selection::clear,
+                onExport = { finishSelection(onExportNotes) },
+                onDelete = { finishSelection(onDeleteNotes) }
+            )
+        } else {
         TopAppBar(
             title = { Text("Поиск") },
             colors = TopAppBarDefaults.topAppBarColors(
                 containerColor = MaterialTheme.colorScheme.surface
             )
         )
+        }
 
         LazyColumn(
             modifier = Modifier
@@ -269,11 +294,13 @@ fun SearchScreen(
             } else {
                 items(results, key = { it.id }) { note ->
                     val subject = subjects.firstOrNull { it.id == note.subjectId } ?: return@items
-                    NoteRow(
+                    SwipeableNoteRow(
                         note = note,
                         subject = subject,
+                        selection = selection,
                         onClick = { onOpenNote(note.id) },
-                        onLongClick = { onDeleteNote(note.id) },
+                        onSharePdf = { onSharePdf(note.id) },
+                        onDelete = { onDeleteNote(note.id) },
                         modifier = Modifier.padding(bottom = 10.dp)
                     )
                 }

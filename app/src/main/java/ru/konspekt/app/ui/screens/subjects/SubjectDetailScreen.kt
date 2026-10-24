@@ -38,6 +38,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,7 +56,9 @@ import ru.konspekt.app.data.Subject
 import ru.konspekt.app.data.SubjectIcon
 import ru.konspekt.app.data.SubjectTone
 import ru.konspekt.app.ui.components.EmptyState
-import ru.konspekt.app.ui.components.NoteRow
+import ru.konspekt.app.ui.components.NoteSelectionTopBar
+import ru.konspekt.app.ui.components.SwipeableNoteRow
+import ru.konspekt.app.ui.components.rememberNoteSelectionState
 import ru.konspekt.app.ui.components.rememberHaptics
 import ru.konspekt.app.ui.theme.LocalKonspektDark
 import ru.konspekt.app.util.notesCountText
@@ -69,6 +72,9 @@ fun SubjectDetailScreen(
     onBack: () -> Unit,
     onOpenNote: (String) -> Unit,
     onDeleteNote: (String) -> Unit,
+    onDeleteNotes: (List<String>) -> Unit,
+    onSharePdf: (String) -> Unit,
+    onExportNotes: (List<String>) -> Unit,
     onRecord: () -> Unit,
     onUpdateSubject: (String, SubjectTone, SubjectIcon) -> Unit,
     modifier: Modifier = Modifier
@@ -76,11 +82,31 @@ fun SubjectDetailScreen(
     val dark = LocalKonspektDark.current
     val haptics = rememberHaptics()
     var showEdit by remember { mutableStateOf(false) }
+    val selection = rememberNoteSelectionState()
+
+    LaunchedEffect(notes.map { it.id }) {
+        selection.retainExisting(notes.map { it.id })
+    }
+
+    fun finishSelection(action: (List<String>) -> Unit) {
+        val ids = selection.selectedIds.toList()
+        selection.clear()
+        if (ids.isNotEmpty()) action(ids)
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
             .navigationBarsPadding()
     ) {
+        if (selection.isActive) {
+            NoteSelectionTopBar(
+                count = selection.count,
+                onClear = selection::clear,
+                onExport = { finishSelection(onExportNotes) },
+                onDelete = { finishSelection(onDeleteNotes) }
+            )
+        } else {
         TopAppBar(
             title = { Text(subject.shortName) },
             navigationIcon = {
@@ -120,6 +146,7 @@ fun SubjectDetailScreen(
                 containerColor = MaterialTheme.colorScheme.surface
             )
         )
+        }
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -262,11 +289,13 @@ fun SubjectDetailScreen(
                 }
             } else {
                 items(notes, key = { it.id }) { note ->
-                    NoteRow(
+                    SwipeableNoteRow(
                         note = note,
                         subject = subject,
+                        selection = selection,
                         onClick = { onOpenNote(note.id) },
-                        onLongClick = { onDeleteNote(note.id) },
+                        onSharePdf = { onSharePdf(note.id) },
+                        onDelete = { onDeleteNote(note.id) },
                         modifier = Modifier.animateItem().padding(bottom = 10.dp)
                     )
                 }
