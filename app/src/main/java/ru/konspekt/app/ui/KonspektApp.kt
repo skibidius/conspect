@@ -133,6 +133,8 @@ fun KonspektApp(viewModel: AppViewModel) {
         }
     }
     val importOverlayVisible = importScreenVisible && audioImportState !is AudioImportState.Idle
+    val overlayImportState = audioImportState.takeIf { it !is AudioImportState.Idle }
+        ?: displayedImport
 
     val microphonePermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -603,7 +605,7 @@ fun KonspektApp(viewModel: AppViewModel) {
             enter = fadeIn(tween(220)) + slideInVertically(tween(320)) { it / 16 },
             exit = fadeOut(tween(180)) + slideOutVertically(tween(240)) { it / 24 }
         ) {
-            val state = displayedImport
+            val state = overlayImportState
             if (state != null) {
                 val subjectId = when (state) {
                     is AudioImportState.Running -> state.subjectId
