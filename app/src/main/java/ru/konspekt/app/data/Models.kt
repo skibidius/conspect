@@ -136,7 +136,7 @@ enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
 enum class AiMode { LOCAL, DEEPSEEK }
 
-enum class SpeechEngine { VOSK, SYSTEM }
+enum class SpeechEngine { SYSTEM, SHERPA }
 
 enum class Palette { SAGE, SKY, LAVENDER, CLAY }
 

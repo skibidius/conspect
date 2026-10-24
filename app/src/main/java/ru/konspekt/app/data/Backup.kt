@@ -13,8 +13,7 @@ data class AppBackup(
     val settings: UserSettings = UserSettings(),
     val subjects: List<Subject> = emptyList(),
     val notes: List<Note> = emptyList(),
-    val trash: List<Note> = emptyList(),
-    val modelId: String = "compact"
+    val trash: List<Note> = emptyList()
 )
 
 object BackupManager {

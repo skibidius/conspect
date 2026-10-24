@@ -33,7 +33,7 @@ class AppRepository(context: Context) {
                     else -> AiMode.LOCAL
                 },
                 speechEngine = when (json.optString("speechEngine")) {
-                    "VOSK" -> SpeechEngine.VOSK
+                    "SHERPA", "VOSK" -> SpeechEngine.SHERPA
                     else -> SpeechEngine.SYSTEM
                 }
             ).let { settings ->

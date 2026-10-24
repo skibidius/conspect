@@ -92,8 +92,8 @@ import ru.konspekt.app.data.NoteGenerationResult
 import ru.konspekt.app.data.Subject
 import ru.konspekt.app.recording.SpeechCapture
 import ru.konspekt.app.recording.SystemSpeechCapture
-import ru.konspekt.app.recording.VoskModelManager
-import ru.konspekt.app.recording.VoskSpeechCapture
+import ru.konspekt.app.recording.SherpaModelManager
+import ru.konspekt.app.recording.SherpaSpeechCapture
 import ru.konspekt.app.ui.components.KonspektLogo
 import ru.konspekt.app.ui.components.rememberHaptics
 import ru.konspekt.app.ui.theme.LocalKonspektDark
@@ -139,7 +139,7 @@ fun RecordScreen(
     val context = LocalContext.current
     val systemAvailable = remember { SpeechRecognizer.isRecognitionAvailable(context) }
     val systemSpeech = useSystemSpeech && systemAvailable
-    val selectedModelSize = remember { VoskModelManager.selected(context).sizeLabel }
+    val selectedModelSize = "~230 МБ"
     val initialDemoLines = remember(demoMode) {
         if (!demoMode) emptyList() else demoScript.take(4).mapIndexed { index, line ->
             TranscriptLine(
@@ -157,7 +157,7 @@ fun RecordScreen(
     var speechError by remember { mutableStateOf<String?>(null) }
     var recognitionStatus by remember { mutableStateOf<String?>(null) }
     var modelDownloading by remember {
-        mutableStateOf(!demoMode && !systemSpeech && !VoskModelManager.isReady(context))
+        mutableStateOf(!demoMode && !systemSpeech && !SherpaModelManager.isReady(context))
     }
     var modelProgress by remember { mutableFloatStateOf(0f) }
     var showCloseDialog by remember { mutableStateOf(false) }
@@ -206,14 +206,16 @@ fun RecordScreen(
                 onError = ::handleError
             )
         } else {
-            VoskSpeechCapture(
+            SherpaSpeechCapture(
                 context = context,
                 onPartial = { partialText = it },
                 onFinal = ::acceptFinal,
                 onAmplitude = { amplitude = it },
                 onStatus = { status ->
                     recognitionStatus = status
-                    if (status == "Готово") modelDownloading = false
+                    if (status.startsWith("Слушаю") || status == "Готово") {
+                        modelDownloading = false
+                    }
                 },
                 onError = ::handleError,
                 onModelProgress = { progress ->

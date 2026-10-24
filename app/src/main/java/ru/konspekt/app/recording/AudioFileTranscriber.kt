@@ -14,8 +14,7 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
-import org.vosk.Recognizer
+import com.k2fsa.sherpa.onnx.OfflineRecognizer
 
 data class AudioTranscription(
     val lines: List<String>,
@@ -24,7 +23,7 @@ data class AudioTranscription(
 
 /**
  * Decodes any audio file supported by Android's MediaCodec into 16 kHz mono
- * PCM and transcribes it with the compact offline Vosk model.
+ * PCM and transcribes it with the offline GigaAM (sherpa-onnx) model.
  */
 object AudioFileTranscriber {
     suspend fun transcribe(
@@ -37,17 +36,19 @@ object AudioFileTranscriber {
         fun status(text: String) = main.post { onStatus(text) }
         fun progress(value: Float) = main.post { onProgress(value.coerceIn(0f, 1f)) }
 
-        status("Загружаем офлайн-модель…")
-        val model = VoskModelManager.ensure(context, VoskModel.COMPACT) { p ->
-            progress(p * 0.2f)
-        } ?: error("Не удалось загрузить модель распознавания")
+        status("Загружаем офлайн-модель GigaAM…")
+        val downloaded = SherpaModelManager.ensureDownloaded(context) { p ->
+            progress(p * 0.3f)
+        }
+        if (!downloaded) error("Не удалось скачать модель распознавания")
+        val recognizer = SherpaModelManager.ensureRecognizer(context)
+            ?: error("Не удалось загрузить модель распознавания")
 
-        status("Читаем аудио…")
-        progress(0.2f)
+        status("Распознаём аудио…")
+        progress(0.3f)
 
         val extractor = MediaExtractor()
         var codec: MediaCodec? = null
-        var recognizer: Recognizer? = null
         try {
             context.contentResolver.openFileDescriptor(uri, "r")?.use { descriptor ->
                 extractor.setDataSource(descriptor.fileDescriptor)
@@ -77,8 +78,9 @@ object AudioFileTranscriber {
             decoder.configure(inputFormat, null, null, 0)
             decoder.start()
 
-            val rec = Recognizer(model, SAMPLE_RATE.toFloat())
-            recognizer = rec
+            val rec: OfflineRecognizer = recognizer
+            val pending = FloatArray(SAMPLE_RATE * 20)
+            var pendingLength = 0
 
             val bufferInfo = MediaCodec.BufferInfo()
             var inputDone = false
@@ -149,9 +151,18 @@ object AudioFileTranscriber {
                             )
                             if (pcm.isNotEmpty()) {
                                 decodedSamples += pcm.size / 2L
-                                if (rec.acceptWaveForm(pcm, pcm.size)) {
-                                    val text = parseText(rec.finalResult)
-                                    if (text.isNotBlank()) lines.add(text)
+                                var offset = 0
+                                while (offset + 1 < pcm.size) {
+                                    val sample = ((pcm[offset + 1].toInt() shl 8) or
+                                        (pcm[offset].toInt() and 0xff)).toShort()
+                                    pending[pendingLength++] = sample / 32768.0f
+                                    offset += 2
+                                    if (pendingLength == pending.size) {
+                                        recognizeChunk(rec, pending, pendingLength).let { text ->
+                                            if (text.isNotBlank()) lines.add(text)
+                                        }
+                                        pendingLength = 0
+                                    }
                                 }
                             }
                         }
@@ -162,7 +173,7 @@ object AudioFileTranscriber {
                         if (durationUs > 0) {
                             val p = (bufferInfo.presentationTimeUs.toFloat() / durationUs.toFloat())
                                 .coerceIn(0f, 1f)
-                            val scaled = 0.2f + p * 0.75f
+                            val scaled = 0.3f + p * 0.65f
                             if (scaled - lastProgress >= 0.01f) {
                                 lastProgress = scaled
                                 progress(scaled)
@@ -172,8 +183,10 @@ object AudioFileTranscriber {
                 }
             }
 
-            val tail = parseText(rec.finalResult)
-            if (tail.isNotBlank()) lines.add(tail)
+            if (pendingLength > 0) {
+                val tail = recognizeChunk(rec, pending, pendingLength)
+                if (tail.isNotBlank()) lines.add(tail)
+            }
             val duration = if (durationUs > 0) {
                 (durationUs / 1_000_000L).toInt().coerceAtLeast(1)
             } else {
@@ -182,16 +195,25 @@ object AudioFileTranscriber {
             progress(1f)
             AudioTranscription(lines = lines.distinct(), durationSeconds = duration)
         } finally {
-            runCatching { recognizer?.close() }
             runCatching { codec?.stop() }
             runCatching { codec?.release() }
             runCatching { extractor.release() }
         }
     }
 
-    private fun parseText(json: String?): String {
-        if (json.isNullOrBlank()) return ""
-        return runCatching { JSONObject(json).optString("text").trim() }.getOrDefault("")
+    private fun recognizeChunk(
+        recognizer: OfflineRecognizer,
+        samples: FloatArray,
+        length: Int
+    ): String {
+        val stream = recognizer.createStream()
+        return try {
+            stream.acceptWaveform(samples.copyOf(length), SAMPLE_RATE)
+            recognizer.decode(stream)
+            recognizer.getResult(stream).text.trim()
+        } finally {
+            stream.release()
+        }
     }
 
     private class PcmResampler(private val targetRate: Int) {

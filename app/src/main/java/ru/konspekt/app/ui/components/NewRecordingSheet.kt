@@ -43,7 +43,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
-import ru.konspekt.app.recording.VoskModelManager
+import ru.konspekt.app.recording.SherpaModelManager
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,8 +76,7 @@ fun NewRecordingSheet(
     var topic by remember { mutableStateOf("") }
     val dark = LocalKonspektDark.current
     val context = LocalContext.current
-    val voskReady = remember { VoskModelManager.isReady(context) }
-    val selectedModel = remember { VoskModelManager.selected(context) }
+    val sherpaReady = remember { SherpaModelManager.isReady(context) }
     val systemAvailable = remember { SpeechRecognizer.isRecognitionAvailable(context) }
     val systemSpeech = useSystemSpeech && systemAvailable
     val haptics = rememberHaptics()
@@ -224,10 +223,10 @@ fun NewRecordingSheet(
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    imageVector = if (systemSpeech || voskReady) Icons.Rounded.CheckCircle
+                    imageVector = if (systemSpeech || sherpaReady) Icons.Rounded.CheckCircle
                     else Icons.Rounded.CloudDownload,
                     contentDescription = null,
-                    tint = if (systemSpeech || voskReady) MaterialTheme.colorScheme.primary
+                    tint = if (systemSpeech || sherpaReady) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(14.dp)
                 )
@@ -236,9 +235,9 @@ fun NewRecordingSheet(
                     text = when {
                         systemSpeech -> "Системное распознавание Android"
                         useSystemSpeech && !systemAvailable ->
-                            "Системное распознавание недоступно — используется Vosk"
-                        voskReady -> "Офлайн-модель распознавания готова"
-                        else -> "Модель распознавания загрузится при старте (${selectedModel.sizeLabel})"
+                            "Системный движок недоступен — используется Sherpa"
+                        sherpaReady -> "Офлайн-модель Sherpa готова"
+                        else -> "Модель Sherpa загрузится при старте (~230 МБ)"
                     },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant

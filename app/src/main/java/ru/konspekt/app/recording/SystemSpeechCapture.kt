@@ -11,7 +11,7 @@ import android.speech.SpeechRecognizer
 
 /**
  * Optional high-accuracy engine backed by the on-device Android recognition
- * service. It uses much less RAM than a large Vosk model; on phones with Google
+ * service. It uses much less RAM than a large offline model; on phones with Google
  * services the Russian language pack may be downloaded/offline. The UI tells
  * the user that the system service may process audio.
  */

@@ -22,8 +22,8 @@ android {
         applicationId = "ru.konspekt.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 12
-        versionName = (project.findProperty("versionName") as String?) ?: "1.7.0"
+        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 13
+        versionName = (project.findProperty("versionName") as String?) ?: "1.8.0"
 
         vectorDrawables.useSupportLibrary = true
         ndk {
@@ -114,7 +114,7 @@ dependencies {
     implementation("io.github.huarangmeng:latex-renderer:1.6.1")
     implementation("io.github.huarangmeng:latex-fonts-katex:1.6.1")
     implementation("com.google.code.gson:gson:2.11.0")
-    implementation("com.alphacephei:vosk-android:0.3.47")
+    implementation("com.bihe0832.android:lib-sherpa-onnx:6.25.21")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

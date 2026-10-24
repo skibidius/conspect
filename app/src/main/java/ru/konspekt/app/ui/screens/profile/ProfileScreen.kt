@@ -27,7 +27,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Favorite
@@ -50,7 +49,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -74,7 +72,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -86,8 +83,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import kotlinx.coroutines.launch
 import ru.konspekt.app.BuildConfig
-import ru.konspekt.app.recording.VoskModel
-import ru.konspekt.app.recording.VoskModelManager
+import ru.konspekt.app.recording.SherpaModelManager
 import ru.konspekt.app.data.AiMode
 import ru.konspekt.app.data.Palette
 import ru.konspekt.app.data.SpeechEngine
@@ -121,11 +117,7 @@ fun ProfileScreen(
     var showApiKey by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var selectedModel by remember { mutableStateOf(VoskModelManager.selected(context)) }
-    var modelReady by remember {
-        mutableStateOf(VoskModelManager.isReady(context, selectedModel))
-    }
-    var showModelPicker by remember { mutableStateOf(false) }
+    var sherpaReady by remember { mutableStateOf(SherpaModelManager.isReady(context)) }
     var modelDownloading by remember { mutableStateOf(false) }
     var modelProgress by remember { mutableFloatStateOf(0f) }
     var modelError by remember { mutableStateOf<String?>(null) }
@@ -398,7 +390,7 @@ fun ProfileScreen(
                 SettingHeader(
                     icon = Icons.Rounded.Tune,
                     title = "Движок распознавания",
-                    subtitle = "Vosk офлайн или системный Android"
+                    subtitle = "Системный Android или Sherpa офлайн"
                 )
                 Spacer(Modifier.height(12.dp))
                 SpeechEngineSelector(
@@ -412,11 +404,11 @@ fun ProfileScreen(
                         settings.speechEngine == SpeechEngine.SYSTEM && systemSpeechAvailable ->
                             "Системное распознавание может обрабатываться сервисом Google. Качество обычно выше, память почти не расходуется."
                         settings.speechEngine == SpeechEngine.SYSTEM ->
-                            "Системное распознавание недоступно — будет использован Vosk."
-                        !systemSpeechAvailable ->
-                            "Vosk работает полностью офлайн. Системный движок на этом устройстве недоступен."
+                            "Системный движок недоступен — будет использован Sherpa."
+                        settings.speechEngine == SpeechEngine.SHERPA ->
+                            "Sherpa GigaAM работает полностью офлайн. Модель ~230 МБ скачивается один раз."
                         else ->
-                            "Vosk работает полностью офлайн. Модель скачивается один раз."
+                            "Системный движок недоступен. Sherpa работает офлайн."
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = if (settings.speechEngine == SpeechEngine.SYSTEM && !systemSpeechAvailable) {
@@ -445,12 +437,12 @@ fun ProfileScreen(
             SettingsCard {
                 val statusColor = when {
                     modelDownloading -> MaterialTheme.colorScheme.secondaryContainer
-                    modelReady -> MaterialTheme.colorScheme.primaryContainer
+                    sherpaReady -> MaterialTheme.colorScheme.primaryContainer
                     else -> MaterialTheme.colorScheme.surfaceContainerHigh
                 }
                 val statusContent = when {
                     modelDownloading -> MaterialTheme.colorScheme.onSecondaryContainer
-                    modelReady -> MaterialTheme.colorScheme.onPrimaryContainer
+                    sherpaReady -> MaterialTheme.colorScheme.onPrimaryContainer
                     else -> MaterialTheme.colorScheme.onSurfaceVariant
                 }
                 Row(
@@ -462,16 +454,16 @@ fun ProfileScreen(
                             .size(42.dp)
                             .clip(RoundedCornerShape(14.dp))
                             .background(
-                                if (modelReady) MaterialTheme.colorScheme.primaryContainer
+                                if (sherpaReady) MaterialTheme.colorScheme.primaryContainer
                                 else MaterialTheme.colorScheme.surfaceContainerHigh
                             ),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = if (modelReady) Icons.Rounded.CheckCircle
+                            imageVector = if (sherpaReady) Icons.Rounded.CheckCircle
                             else Icons.Rounded.CloudDownload,
                             contentDescription = null,
-                            tint = if (modelReady) MaterialTheme.colorScheme.onPrimaryContainer
+                            tint = if (sherpaReady) MaterialTheme.colorScheme.onPrimaryContainer
                             else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(21.dp)
                         )
@@ -479,79 +471,32 @@ fun ProfileScreen(
                     Spacer(Modifier.size(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Распознавание речи",
+                            text = "Офлайн-модель",
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(Modifier.height(2.dp))
                         Text(
-                            text = if (modelReady) {
-                                "Vosk · русский · ${VoskModelManager.sizeBytes(context, selectedModel) / (1024 * 1024)} МБ"
+                            text = if (sherpaReady) {
+                                "Sherpa · GigaAM · ${SherpaModelManager.sizeBytes(context) / (1024 * 1024)} МБ"
                             } else {
-                                "Vosk · русский · ${selectedModel.sizeLabel}"
+                                "Sherpa · GigaAM · ~230 МБ"
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     Spacer(Modifier.size(10.dp))
-                    Surface(
-                        shape = CircleShape,
-                        color = statusColor
-                    ) {
+                    Surface(shape = CircleShape, color = statusColor) {
                         Text(
                             text = when {
                                 modelDownloading -> "Загрузка"
-                                modelReady -> "Скачана"
+                                sherpaReady -> "Скачана"
                                 else -> "Не скачана"
                             },
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                             style = MaterialTheme.typography.labelSmall,
                             color = statusContent
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(14.dp))
-                Surface(
-                    onClick = {
-                        if (!modelDownloading) {
-                            haptics.tap()
-                            showModelPicker = true
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Tune,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(19.dp)
-                        )
-                        Spacer(Modifier.size(10.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Модель",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = "${selectedModel.title} · ${selectedModel.sizeLabel}",
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                        Icon(
-                            imageVector = Icons.Rounded.ChevronRight,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }
@@ -563,7 +508,7 @@ fun ProfileScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Скачивание модели",
+                            text = "Скачивание GigaAM",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -597,7 +542,7 @@ fun ProfileScreen(
 
                 if (!modelDownloading) {
                     Spacer(Modifier.height(16.dp))
-                    if (modelReady) {
+                    if (sherpaReady) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -609,11 +554,12 @@ fun ProfileScreen(
                                     modelProgress = 0f
                                     modelError = null
                                     scope.launch {
-                                        val ok = VoskModelManager.downloadModel(context, model = selectedModel, force = true) { p ->
-                                            scope.launch { modelProgress = p }
-                                        }
+                                        val ok = SherpaModelManager.ensureDownloaded(
+                                            context,
+                                            force = true
+                                        ) { p -> scope.launch { modelProgress = p } }
                                         modelDownloading = false
-                                        modelReady = VoskModelManager.isReady(context, selectedModel)
+                                        sherpaReady = SherpaModelManager.isReady(context)
                                         if (!ok) modelError = "Не удалось обновить модель"
                                     }
                                 },
@@ -621,14 +567,12 @@ fun ProfileScreen(
                                     .weight(1f)
                                     .height(46.dp),
                                 shape = RoundedCornerShape(14.dp)
-                            ) {
-                                Text("Обновить")
-                            }
+                            ) { Text("Обновить") }
                             OutlinedButton(
                                 onClick = {
                                     haptics.tap()
-                                    VoskModelManager.delete(context, selectedModel)
-                                    modelReady = false
+                                    SherpaModelManager.delete(context)
+                                    sherpaReady = false
                                     modelProgress = 0f
                                     modelError = null
                                 },
@@ -643,9 +587,7 @@ fun ProfileScreen(
                                 colors = ButtonDefaults.outlinedButtonColors(
                                     contentColor = MaterialTheme.colorScheme.error
                                 )
-                            ) {
-                                Text("Удалить")
-                            }
+                            ) { Text("Удалить") }
                         }
                     } else {
                         Button(
@@ -655,11 +597,11 @@ fun ProfileScreen(
                                 modelProgress = 0f
                                 modelError = null
                                 scope.launch {
-                                    val ok = VoskModelManager.downloadModel(context, model = selectedModel) { p ->
+                                    val ok = SherpaModelManager.ensureDownloaded(context) { p ->
                                         scope.launch { modelProgress = p }
                                     }
                                     modelDownloading = false
-                                    modelReady = VoskModelManager.isReady(context, selectedModel)
+                                    sherpaReady = SherpaModelManager.isReady(context)
                                     if (!ok) modelError = "Не удалось скачать модель"
                                 }
                             },
@@ -674,9 +616,15 @@ fun ProfileScreen(
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(Modifier.size(8.dp))
-                            Text("Скачать · ${selectedModel.sizeLabel}")
+                            Text("Скачать · ~230 МБ")
                         }
                     }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = "Используется для офлайн-записи и импорта аудио.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
 
@@ -715,7 +663,7 @@ fun ProfileScreen(
                         )
                         Spacer(Modifier.height(3.dp))
                         Text(
-                            text = "Vosk работает офлайн. Системное распознавание может обрабатываться сервисом Google. Аудио не сохраняется. В режиме DeepSeek отправляется только текст лекции.",
+                            text = "Sherpa GigaAM работает офлайн. Системное распознавание может обрабатываться сервисом Google. Аудио не сохраняется. В режиме DeepSeek отправляется только текст лекции.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f)
                         )
@@ -834,22 +782,6 @@ fun ProfileScreen(
         }
     }
 
-    if (showModelPicker) {
-        ModelPickerDialog(
-            selected = selectedModel,
-            onSelect = { model ->
-                if (VoskModelManager.select(context, model)) {
-                    selectedModel = model
-                    modelReady = VoskModelManager.isReady(context, model)
-                    modelProgress = 0f
-                    modelError = null
-                    showModelPicker = false
-                }
-            },
-            onDismiss = { showModelPicker = false }
-        )
-    }
-
     pendingImport?.let { raw ->
         AlertDialog(
             onDismissRequest = { pendingImport = null },
@@ -860,8 +792,7 @@ fun ProfileScreen(
                 TextButton(onClick = {
                     haptics.confirm()
                     if (onImportBackup(raw)) {
-                        selectedModel = VoskModelManager.selected(context)
-                        modelReady = VoskModelManager.isReady(context, selectedModel)
+                        sherpaReady = SherpaModelManager.isReady(context)
                         onMessage("Данные импортированы")
                     } else {
                         onMessage("Не удалось прочитать резервную копию")
@@ -881,126 +812,6 @@ fun ProfileScreen(
             }
         )
     }
-}
-
-@Composable
-private fun ModelPickerDialog(
-    selected: VoskModel,
-    onSelect: (VoskModel) -> Unit,
-    onDismiss: () -> Unit
-) {
-    val context = LocalContext.current
-    val haptics = rememberHaptics()
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(28.dp),
-        title = { Text("Модель распознавания") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                VoskModel.entries.forEach { model ->
-                    val ready = VoskModelManager.isReady(context, model)
-                    val supported = VoskModelManager.canUse(context, model)
-                    val active = selected == model
-                    Surface(
-                        onClick = {
-                            if (supported) {
-                                haptics.tap()
-                                onSelect(model)
-                            }
-                        },
-                        modifier = Modifier.alpha(if (supported) 1f else 0.55f),
-                        shape = RoundedCornerShape(18.dp),
-                        color = if (active) {
-                            MaterialTheme.colorScheme.secondaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.surfaceContainerHigh
-                        }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(
-                                        if (active) {
-                                            MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.08f)
-                                        } else {
-                                            MaterialTheme.colorScheme.surfaceContainerHighest
-                                        }
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = if (ready) Icons.Rounded.CheckCircle
-                                    else Icons.Rounded.CloudDownload,
-                                    contentDescription = null,
-                                    tint = if (active) {
-                                        MaterialTheme.colorScheme.onSecondaryContainer
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                    },
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                            Spacer(Modifier.size(10.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = model.title,
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = if (active) {
-                                        MaterialTheme.colorScheme.onSecondaryContainer
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurface
-                                    }
-                                )
-                                Text(
-                                    text = model.description,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (active) {
-                                        MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.72f)
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                    }
-                                )
-                                Spacer(Modifier.height(3.dp))
-                                Text(
-                                    text = if (!supported) {
-                                        "Недоступна · нужно 16+ ГБ RAM"
-                                    } else if (ready) {
-                                        "Скачана · ${model.sizeLabel}"
-                                    } else {
-                                        "Не скачана · ${model.sizeLabel}"
-                                    },
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = if (!supported) {
-                                        MaterialTheme.colorScheme.error
-                                    } else if (ready) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                    }
-                                )
-                            }
-                            RadioButton(
-                                selected = active,
-                                onClick = null,
-                                enabled = supported
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                haptics.tap()
-                onDismiss()
-            }) { Text("Закрыть") }
-        }
-    )
 }
 
 @Composable
@@ -1107,7 +918,7 @@ private fun SpeechEngineSelector(
     systemAvailable: Boolean,
     onSelect: (SpeechEngine) -> Unit
 ) {
-    val options = listOf(SpeechEngine.VOSK to "Vosk", SpeechEngine.SYSTEM to "Системный")
+    val options = listOf(SpeechEngine.SYSTEM to "Системный", SpeechEngine.SHERPA to "Sherpa")
     val haptics = rememberHaptics()
     SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
         options.forEachIndexed { index, (engine, label) ->

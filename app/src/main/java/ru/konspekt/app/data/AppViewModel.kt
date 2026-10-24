@@ -2,8 +2,6 @@ package ru.konspekt.app.data
 
 import android.app.Application
 import ru.konspekt.app.BuildConfig
-import ru.konspekt.app.recording.VoskModel
-import ru.konspekt.app.recording.VoskModelManager
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -190,8 +188,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             settings = settings,
             subjects = subjects,
             notes = notes,
-            trash = trash,
-            modelId = VoskModelManager.selected(getApplication()).id
+            trash = trash
         )
     )
 
@@ -205,9 +202,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         repository.saveSubjects(subjects)
         repository.saveNotes(notes)
         repository.saveTrash(trash)
-        VoskModel.entries.firstOrNull { it.id == backup.modelId }?.let { model ->
-            VoskModelManager.select(getApplication(), model)
-        }
         return true
     }
 

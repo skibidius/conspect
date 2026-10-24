@@ -212,7 +212,7 @@ fun ImportAudioScreen(
 
             Spacer(Modifier.height(18.dp))
             Text(
-                text = "Используется компактная модель Vosk. Аудио не отправляется в интернет.",
+                text = "Используется модель GigaAM через sherpa-onnx. Аудио не отправляется в интернет.",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
