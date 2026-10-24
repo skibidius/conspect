@@ -18,6 +18,42 @@ import kotlinx.coroutines.withContext
  * explicitly enables it and saves an API key. Local mode never touches network.
  */
 class DeepSeekClient {
+    suspend fun verifyKey(apiKey: String) = withContext(Dispatchers.IO) {
+        val connection = (URL("https://api.deepseek.com/models").openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 20_000
+            readTimeout = 20_000
+            setRequestProperty("Authorization", "Bearer ${apiKey.trim()}")
+        }
+        try {
+            val status = connection.responseCode
+            val stream = if (status in 200..299) connection.inputStream else connection.errorStream
+            val body = stream?.let { input ->
+                BufferedReader(InputStreamReader(input, Charsets.UTF_8)).use { it.readText() }
+            }.orEmpty()
+            if (status !in 200..299) {
+                val apiMessage = runCatching {
+                    JSONObject(body).getJSONObject("error").getString("message")
+                }.getOrNull()
+                error(
+                    when (status) {
+                        401, 403 -> "Неверный API-ключ DeepSeek"
+                        402 -> "На балансе DeepSeek недостаточно средств"
+                        429 -> "Слишком много запросов к DeepSeek"
+                        else -> apiMessage ?: "DeepSeek вернул ошибку $status"
+                    }
+                )
+            }
+            val models = JSONObject(body).optJSONArray("data") ?: JSONArray()
+            val hasFlash = (0 until models.length()).any { index ->
+                models.optJSONObject(index)?.optString("id") == "deepseek-flash"
+            }
+            if (!hasFlash) error("Модель deepseek-flash недоступна для этого ключа")
+        } finally {
+            connection.disconnect()
+        }
+    }
+
     suspend fun generate(
         apiKey: String,
         subject: Subject,

@@ -76,7 +76,7 @@ fun SubjectDetailScreen(
     onSharePdf: (String) -> Unit,
     onExportNotes: (List<String>) -> Unit,
     onRecord: () -> Unit,
-    onUpdateSubject: (String, SubjectTone, SubjectIcon) -> Unit,
+    onUpdateSubject: (String, String, SubjectTone, SubjectIcon) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val dark = LocalKonspektDark.current
@@ -195,46 +195,22 @@ fun SubjectDetailScreen(
                                 )
                                 Spacer(Modifier.size(5.dp))
                                 Text(
-                                    text = subject.teacher,
+                                    text = subject.teacher.ifBlank { "Преподаватель не указан" },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = subject.tone.onContainer(dark).copy(alpha = 0.72f)
                                 )
                             }
                             Spacer(Modifier.height(18.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Surface(
-                                    shape = CircleShape,
-                                    color = subject.tone.onContainer(dark).copy(alpha = 0.08f)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.Schedule,
-                                            contentDescription = null,
-                                            tint = subject.tone.onContainer(dark),
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                        Spacer(Modifier.size(5.dp))
-                                        Text(
-                                            text = subject.nextClass,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = subject.tone.onContainer(dark)
-                                        )
-                                    }
-                                }
-                                Surface(
-                                    shape = CircleShape,
-                                    color = subject.tone.onContainer(dark).copy(alpha = 0.08f)
-                                ) {
-                                    Text(
-                                        text = "${notesCountText(notes.size)} · $totalMinutes мин",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = subject.tone.onContainer(dark),
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
-                                    )
-                                }
+                            Surface(
+                                shape = CircleShape,
+                                color = subject.tone.onContainer(dark).copy(alpha = 0.08f)
+                            ) {
+                                Text(
+                                    text = "${notesCountText(notes.size)} · $totalMinutes мин",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = subject.tone.onContainer(dark),
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+                                )
                             }
                         }
                     }
@@ -307,8 +283,8 @@ fun SubjectDetailScreen(
         EditSubjectDialog(
             subject = subject,
             onDismiss = { showEdit = false },
-            onConfirm = { name, tone, icon ->
-                onUpdateSubject(name, tone, icon)
+            onConfirm = { name, teacher, tone, icon ->
+                onUpdateSubject(name, teacher, tone, icon)
                 showEdit = false
             }
         )
@@ -320,9 +296,10 @@ fun SubjectDetailScreen(
 private fun EditSubjectDialog(
     subject: Subject,
     onDismiss: () -> Unit,
-    onConfirm: (String, SubjectTone, SubjectIcon) -> Unit
+    onConfirm: (String, String, SubjectTone, SubjectIcon) -> Unit
 ) {
     var name by remember { mutableStateOf(subject.name) }
+    var teacher by remember { mutableStateOf(subject.teacher) }
     var tone by remember { mutableStateOf(subject.tone) }
     var icon by remember { mutableStateOf(subject.icon) }
     val haptics = rememberHaptics()
@@ -341,6 +318,16 @@ private fun EditSubjectDialog(
                     singleLine = true,
                     shape = RoundedCornerShape(14.dp),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = teacher,
+                    onValueChange = { teacher = it },
+                    label = { Text("Преподаватель") },
+                    placeholder = { Text("например, доц. Соколова") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(14.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(16.dp))
@@ -417,7 +404,7 @@ private fun EditSubjectDialog(
             Button(
                 onClick = {
                     haptics.confirm()
-                    onConfirm(name.trim(), tone, icon)
+                    onConfirm(name.trim(), teacher.trim(), tone, icon)
                 },
                 enabled = name.isNotBlank()
             ) { Text("Сохранить") }

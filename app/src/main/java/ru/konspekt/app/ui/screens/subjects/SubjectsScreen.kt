@@ -27,7 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.AutoAwesome
-import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -339,14 +339,14 @@ private fun SubjectGridCard(
                 Spacer(Modifier.height(10.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Rounded.Schedule,
+                        imageVector = Icons.Rounded.Person,
                         contentDescription = null,
                         tint = onContainer.copy(alpha = 0.66f),
                         modifier = Modifier.size(13.dp)
                     )
                     Spacer(Modifier.size(4.dp))
                     Text(
-                        text = subject.nextClass,
+                        text = subject.teacher.ifBlank { "Преподаватель не указан" },
                         style = MaterialTheme.typography.labelSmall,
                         color = onContainer.copy(alpha = 0.7f),
                         maxLines = 1,

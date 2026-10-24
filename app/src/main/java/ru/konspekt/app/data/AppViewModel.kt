@@ -71,11 +71,27 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun totalMinutesForSubject(subjectId: String): Int =
         notes.filter { it.subjectId == subjectId }.sumOf { it.durationMinutes }
 
-    fun updateSubject(id: String, name: String, tone: SubjectTone, icon: SubjectIcon) {
+    fun updateSubject(
+        id: String,
+        name: String,
+        teacher: String,
+        tone: SubjectTone,
+        icon: SubjectIcon
+    ) {
         val clean = name.trim()
         if (clean.isBlank()) return
         subjects = subjects.map {
-            if (it.id == id) it.copy(name = clean, shortName = clean, tone = tone, icon = icon) else it
+            if (it.id == id) {
+                it.copy(
+                    name = clean,
+                    shortName = clean,
+                    teacher = teacher.trim().ifBlank { "Преподаватель не указан" },
+                    tone = tone,
+                    icon = icon
+                )
+            } else {
+                it
+            }
         }
         repository.saveSubjects(subjects.filter { it.id.startsWith("custom-") })
     }

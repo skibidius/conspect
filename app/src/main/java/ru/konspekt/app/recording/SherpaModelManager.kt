@@ -12,6 +12,12 @@ import java.net.URL
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+data class ModelUpdateCheck(
+    val available: Boolean,
+    val remoteBytes: Long? = null,
+    val error: String? = null
+)
+
 /**
  * Downloads the compact GigaAM v2 Russian CTC model for sherpa-onnx.
  * Files are stored in app-private storage; the APK stays small.
@@ -26,6 +32,8 @@ object SherpaModelManager {
     private const val MODEL_NAME = "model.int8.onnx"
     private const val TOKENS_NAME = "tokens.txt"
     private const val MIN_MODEL_BYTES = 100L * 1024 * 1024
+    private const val META_PREFS = "sherpa_model_meta"
+    private const val KEY_SIGNATURE = "remote_signature"
 
     private val lock = Any()
     @Volatile
@@ -41,6 +49,37 @@ object SherpaModelManager {
 
     fun sizeBytes(context: Context): Long =
         modelDir(context).walkTopDown().filter { it.isFile }.sumOf { it.length() }
+
+    suspend fun checkForUpdate(context: Context): ModelUpdateCheck =
+        withContext(Dispatchers.IO) {
+            if (!isReady(context)) {
+                return@withContext ModelUpdateCheck(
+                    available = false,
+                    error = "Сначала скачайте модель"
+                )
+            }
+            try {
+                val remote = fetchRemoteInfo()
+                val localBytes = File(modelDir(context), MODEL_NAME).length()
+                val prefs = context.getSharedPreferences(META_PREFS, Context.MODE_PRIVATE)
+                val stored = prefs.getString(KEY_SIGNATURE, null)
+                val available = if (stored != null) {
+                    stored != remote.signature
+                } else {
+                    remote.bytes > 0L && localBytes != remote.bytes
+                }
+                if (stored == null || !available) {
+                    prefs.edit().putString(KEY_SIGNATURE, remote.signature).apply()
+                }
+                ModelUpdateCheck(available = available, remoteBytes = remote.bytes)
+            } catch (e: Throwable) {
+                ModelUpdateCheck(
+                    available = false,
+                    error = e.message?.takeIf { it.isNotBlank() }
+                        ?: "Не удалось проверить обновления"
+                )
+            }
+        }
 
     suspend fun ensureDownloaded(
         context: Context,
@@ -58,11 +97,18 @@ object SherpaModelManager {
                 dir.mkdirs()
                 val model = File(dir, MODEL_NAME)
                 val tokens = File(dir, TOKENS_NAME)
+                var downloadedModel = false
                 if (model.length() <= MIN_MODEL_BYTES) {
                     download(MODEL_URL, model) { p -> onProgress(p * 0.98f) }
+                    downloadedModel = true
                 }
                 if (!tokens.isFile) {
                     download(TOKENS_URL, tokens) { }
+                    downloadedModel = true
+                }
+                if (downloadedModel) {
+                    context.getSharedPreferences(META_PREFS, Context.MODE_PRIVATE)
+                        .edit().remove(KEY_SIGNATURE).apply()
                 }
                 val license = File(dir, "LICENSE")
                 if (!license.isFile) {
@@ -108,6 +154,40 @@ object SherpaModelManager {
             recognizer?.let { runCatching { it.release() } }
             recognizer = null
             modelDir(context).deleteRecursively()
+            context.getSharedPreferences(META_PREFS, Context.MODE_PRIVATE)
+                .edit().remove(KEY_SIGNATURE).apply()
+        }
+    }
+
+    private data class RemoteInfo(val bytes: Long, val signature: String)
+
+    private fun fetchRemoteInfo(): RemoteInfo {
+        val connection = (URL(MODEL_URL).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 20_000
+            readTimeout = 30_000
+            instanceFollowRedirects = true
+            setRequestProperty("Range", "bytes=0-0")
+            setRequestProperty("Accept-Encoding", "identity")
+        }
+        try {
+            val status = connection.responseCode
+            if (status !in 200..299) error("Сервер модели вернул ошибку $status")
+            val contentRange = connection.getHeaderField("Content-Range")
+            val rangeBytes = contentRange
+                ?.substringAfterLast('/')
+                ?.toLongOrNull()
+            val length = rangeBytes
+                ?: connection.contentLengthLong.takeIf { it > 0L }
+                ?: error("Сервер не сообщил размер модели")
+            val etag = connection.getHeaderField("ETag")?.trim()?.takeIf { it.isNotBlank() }
+            val lastModified = connection.getHeaderField("Last-Modified")?.trim()
+                ?.takeIf { it.isNotBlank() }
+            val signature = etag ?: "${lastModified ?: "size"}|$length"
+            connection.inputStream?.use { it.read() }
+            return RemoteInfo(bytes = length, signature = signature)
+        } finally {
+            connection.disconnect()
         }
     }
 

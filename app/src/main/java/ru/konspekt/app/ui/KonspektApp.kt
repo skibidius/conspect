@@ -518,8 +518,8 @@ fun KonspektApp(viewModel: AppViewModel) {
                         onSharePdf = ::shareNotePdf,
                         onExportNotes = ::exportNotesPdf,
                         onRecord = { openRecording(subject.id) },
-                        onUpdateSubject = { name, tone, icon ->
-                            viewModel.updateSubject(subject.id, name, tone, icon)
+                        onUpdateSubject = { name, teacher, tone, icon ->
+                            viewModel.updateSubject(subject.id, name, teacher, tone, icon)
                             message("Предмет обновлён")
                         }
                     )

@@ -47,6 +47,7 @@ import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -85,6 +86,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import kotlinx.coroutines.launch
 import ru.konspekt.app.BuildConfig
+import ru.konspekt.app.data.DeepSeekClient
 import ru.konspekt.app.recording.SherpaModelManager
 import ru.konspekt.app.data.AiMode
 import ru.konspekt.app.data.Palette
@@ -118,12 +120,18 @@ fun ProfileScreen(
 ) {
     var apiKeyInput by remember { mutableStateOf("") }
     var showApiKey by remember { mutableStateOf(false) }
+    var keyVerifying by remember { mutableStateOf(false) }
+    var keyError by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
+    val deepSeekClient = remember { DeepSeekClient() }
     val scope = rememberCoroutineScope()
     var sherpaReady by remember { mutableStateOf(SherpaModelManager.isReady(context)) }
     var modelDownloading by remember { mutableStateOf(false) }
     var modelProgress by remember { mutableFloatStateOf(0f) }
     var modelError by remember { mutableStateOf<String?>(null) }
+    var modelChecking by remember { mutableStateOf(false) }
+    var modelUpdateAvailable by remember { mutableStateOf(false) }
+    var modelCheckMessage by remember { mutableStateOf<String?>(null) }
     val haptics = rememberHaptics()
     val uriHandler = LocalUriHandler.current
     val systemSpeechAvailable = remember { SpeechRecognizer.isRecognitionAvailable(context) }
@@ -323,7 +331,10 @@ fun ProfileScreen(
                     } else {
                         OutlinedTextField(
                             value = apiKeyInput,
-                            onValueChange = { apiKeyInput = it },
+                            onValueChange = {
+                                apiKeyInput = it
+                                keyError = null
+                            },
                             modifier = Modifier.fillMaxWidth(),
                             label = { Text("API-ключ DeepSeek") },
                             placeholder = { Text("sk-…") },
@@ -350,16 +361,47 @@ fun ProfileScreen(
                                 }
                             }
                         )
+                        if (keyError != null) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                text = keyError.orEmpty(),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
                         Spacer(Modifier.height(8.dp))
                         Button(
                             onClick = {
                                 haptics.confirm()
-                                onSaveDeepSeekKey(apiKeyInput)
-                                apiKeyInput = ""
+                                keyVerifying = true
+                                keyError = null
+                                val key = apiKeyInput
+                                scope.launch {
+                                    val result = runCatching { deepSeekClient.verifyKey(key) }
+                                    keyVerifying = false
+                                    result.onSuccess {
+                                        onSaveDeepSeekKey(key)
+                                        apiKeyInput = ""
+                                        haptics.confirm()
+                                        onMessage("Ключ DeepSeek проверен")
+                                    }.onFailure { error ->
+                                        keyError = error.message ?: "Не удалось проверить ключ"
+                                    }
+                                }
                             },
-                            enabled = apiKeyInput.isNotBlank()
+                            enabled = apiKeyInput.isNotBlank() && !keyVerifying
                         ) {
-                            Text("Сохранить ключ")
+                            if (keyVerifying) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.onPrimary
+                                )
+                                Spacer(Modifier.size(8.dp))
+                                Text("Проверяем…")
+                            } else {
+                                Text("Проверить и сохранить")
+                            }
                         }
                     }
                     Spacer(Modifier.height(2.dp))
@@ -546,13 +588,76 @@ fun ProfileScreen(
                 if (!modelDownloading) {
                     Spacer(Modifier.height(16.dp))
                     if (sherpaReady) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        OutlinedButton(
+                            onClick = {
+                                haptics.tap()
+                                modelChecking = true
+                                modelCheckMessage = null
+                                modelError = null
+                                scope.launch {
+                                    val result = SherpaModelManager.checkForUpdate(context)
+                                    modelChecking = false
+                                    modelUpdateAvailable = result.available
+                                    if (result.error != null) {
+                                        modelError = result.error
+                                    } else {
+                                        modelCheckMessage = if (result.available) {
+                                            "Доступна новая версия модели"
+                                        } else {
+                                            "Обновлений нет"
+                                        }
+                                    }
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(46.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            enabled = !modelChecking
                         ) {
-                            OutlinedButton(
+                            if (modelChecking) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(Modifier.size(7.dp))
+                                Text("Проверяем…", maxLines = 1)
+                            } else {
+                                Text(
+                                    text = "Проверить обновления",
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = {
+                                haptics.tap()
+                                SherpaModelManager.delete(context)
+                                sherpaReady = false
+                                modelProgress = 0f
+                                modelError = null
+                                modelUpdateAvailable = false
+                                modelCheckMessage = null
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(46.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            border = BorderStroke(
+                                1.dp,
+                                MaterialTheme.colorScheme.error.copy(alpha = 0.45f)
+                            ),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error
+                            )
+                        ) { Text("Удалить модель") }
+                        if (modelUpdateAvailable) {
+                            Spacer(Modifier.height(10.dp))
+                            Button(
                                 onClick = {
-                                    haptics.tap()
+                                    haptics.confirm()
                                     modelDownloading = true
                                     modelProgress = 0f
                                     modelError = null
@@ -563,34 +668,32 @@ fun ProfileScreen(
                                         ) { p -> scope.launch { modelProgress = p } }
                                         modelDownloading = false
                                         sherpaReady = SherpaModelManager.isReady(context)
+                                        modelUpdateAvailable = false
+                                        modelCheckMessage = if (ok) "Модель обновлена" else null
                                         if (!ok) modelError = "Не удалось обновить модель"
                                     }
                                 },
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .height(46.dp),
+                                    .fillMaxWidth()
+                                    .height(48.dp),
                                 shape = RoundedCornerShape(14.dp)
-                            ) { Text("Обновить") }
-                            OutlinedButton(
-                                onClick = {
-                                    haptics.tap()
-                                    SherpaModelManager.delete(context)
-                                    sherpaReady = false
-                                    modelProgress = 0f
-                                    modelError = null
-                                },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(46.dp),
-                                shape = RoundedCornerShape(14.dp),
-                                border = BorderStroke(
-                                    1.dp,
-                                    MaterialTheme.colorScheme.error.copy(alpha = 0.45f)
-                                ),
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    contentColor = MaterialTheme.colorScheme.error
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.CloudDownload,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
                                 )
-                            ) { Text("Удалить") }
+                                Spacer(Modifier.size(8.dp))
+                                Text("Обновить модель")
+                            }
+                        }
+                        if (modelCheckMessage != null) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                text = modelCheckMessage.orEmpty(),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     } else {
                         Button(
@@ -605,6 +708,8 @@ fun ProfileScreen(
                                     }
                                     modelDownloading = false
                                     sherpaReady = SherpaModelManager.isReady(context)
+                                    modelUpdateAvailable = false
+                                    modelCheckMessage = null
                                     if (!ok) modelError = "Не удалось скачать модель"
                                 }
                             },
